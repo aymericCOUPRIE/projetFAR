@@ -7,65 +7,64 @@
 #include <arpa/inet.h>
 #define TMAX 65000
 
-int envoie(int SockE, char* mot) {
-	int taille = (strlen(mot)+1)*sizeof(char);
+int envoie(int SockE, char* message) {
+	int taille_msg = (strlen(message)+1)*sizeof(char);
 	int mes;
 
 	//Envoi de la taille du message
-	mes = send(SockE, &taille, sizeof(int), 0);
+	mes = send(SockE, &taille_msg, sizeof(int), 0);
 	if (mes<0){
 		perror("Erreur envoie\n");
 		return -1;
 	}
 	if (mes==0){
-		//perror("Socket fermée\n");
+		perror("Socket fermée\n");
 		return 0;
 	}
 
 	//Envoi du message
-	mes = send(SockE, mot, strlen(mot)+1, 0);
+	mes = send(SockE, message, strlen(message)+1, 0);
 	if (mes < 0){
 		perror("Erreur envoie\n");
 		return -1;
 	}
 	if (mes == 0){
-		//perror("Socket fermée\n");
+		perror("Aucun envoie\n");
 		return 0;
 	}
 	return 1;
 }
 
 
-int reception(int sockE, char* mot){
-	int nb_octets;
+int reception(int sockE, char* message){
+	int taille_msg;
 	int rec;
-	int nb_recu = 0;
+	int taille_rec = 0;
 
 	//Réception de la taille du message à recevoir
-	rec = recv(sockE, &nb_octets, sizeof(int), 0);
-	if (rec<0){
+	rec = recv(sockE, &taille_msg, sizeof(int), 0);
+	if (rec < 0){
 		perror("Erreur reception\n");
 		return -1;
-	}
-	if (rec==0){
-		//perror("Socket fermée\n");
+	} else if (rec == 0) {
+		perror("Aucun message recu\n");
 		return 0;
 	}
 
 	//Boucle pour recevoir toutes les portions du message
-	while(nb_recu<nb_octets){
-		rec = recv(sockE, mot, nb_octets*sizeof(char), 0);
-		if (rec<0){
+	while(taille_rec < taille_msg){
+		rec = recv(sockE, message, taille_msg*sizeof(char), 0);
+		if (rec < 0){
 			perror("Erreur reception\n");
 			return -1;
 		}
 		if (rec==0){
-			//perror("Socket fermée\n");
+			perror("Socket fermée\n");
 			return 0;
 		}
-		nb_recu += rec;
+		taille_rec += rec;
 	}
-	printf("Message reçu : %s\n", mot);
+	printf("Message reçu : %s\n", message);
 	return 1;
 }
 
@@ -105,15 +104,15 @@ int main(int argc, char* argv[]){
 		return -1;
 	}
 
-	char mot[TMAX] = "";
+	char msg[TMAX] = "";
 
-	res = reception(dS, mot);
+	res = reception(dS, msg);
 	if(res != 1){
 		return -1;
 	}
 
 	while(1) {
-		res = reception(dS, mot);
+		res = reception(dS, msg);
 		if(res == -1) {
 			perror("Erreur reception");
 			exit(0);
@@ -122,10 +121,10 @@ int main(int argc, char* argv[]){
 			return -1;
 		}
 
-		if(strcmp(mot,"Vous êtes : Client 2\n") !=0 ) {
+		if(strcmp(msg,"Vous êtes : Client 2\n") !=0 ) {
 			printf("Votre message : ");
-			fgets(mot, TMAX, stdin);
-			res = envoie(dS, mot);
+			fgets(msg, TMAX, stdin);
+			res = envoie(dS, msg);
 			if(res != 1) {
 				return -1;
 			}

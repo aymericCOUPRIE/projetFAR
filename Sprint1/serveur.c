@@ -8,8 +8,8 @@
 #define TMAX 65000
 
 //envoie d'un message
-int envoie(int SockE, char* mot){
-	int taille = (strlen(mot)+1)*sizeof(char);
+int envoie(int SockE, char* message){
+	int taille = (strlen(message)+1)*sizeof(char);
 	int mes;
 
 	//Envoi de la taille du message
@@ -23,7 +23,7 @@ int envoie(int SockE, char* mot){
 	}
 
 	//Envoi du message
-	mes = send(SockE, mot, taille, 0);
+	mes = send(SockE, message, taille, 0);
 	if (mes<0){
 		perror("Erreur envoie message\n");
 		return -1;
@@ -38,7 +38,7 @@ int envoie(int SockE, char* mot){
 
 
 //reception d'un message
-int reception(int sockE, char* mot){
+int reception(int sockE, char* message){
 	int nb_octets;
 	int rec;
 	int nb_recu = 0;
@@ -56,7 +56,7 @@ int reception(int sockE, char* mot){
 	
 	//Boucle pour recevoir toutes les portions du message
 	while(nb_recu < nb_octets){
-		rec = recv(sockE, mot, nb_octets*sizeof(char), 0);
+		rec = recv(sockE, message, nb_octets*sizeof(char), 0);
 		if (rec <0){
 			perror("Erreur reception\n");
 			return -1;
@@ -117,7 +117,7 @@ int main(int argc, char* argv[]) {
             perror("Erreur accept client 1\n");
             exit(0);
         }
-        printf("Client 1 : Connexion OK\n");
+        printf("Client 1 : Connexion OKK\n");
 
         res = envoie(dSC1, "Vous êtes : Client 1... en attente de Client 2 ");
 		if (res != 1){
@@ -182,7 +182,7 @@ int main(int argc, char* argv[]) {
 				}
 			}
 		}
-		
+
 		printf("Fin échange\n");
 		close(dSC1);
 		close(dSC2);
