@@ -1,0 +1,43 @@
+@startuml
+
+actor client1
+actor serveur
+actor client2
+actor client3
+
+loop ∞
+
+client1 -> serveur : demande de connexion
+activate client1
+serveur --> client1 : connexion confirmée
+activate serveur
+client2 -> serveur : demande de connexion
+activate client2
+serveur --> client2 : connexion confirmée
+client3 -> serveur : demande de connexion
+activate client3
+serveur --> client3 : mise en attente du client
+deactivate client3
+
+loop message != 'fin'
+
+client1 -> serveur : envoie d'un message
+serveur --> client2 : transmission du message
+client2 -> serveur: envoie d'un message
+serveur --> client1 : transmission du message
+
+end
+
+deactivate client1
+deactivate client2
+serveur -> serveur : fermeture de socket client1
+serveur -> serveur : fermeture de socket client2
+
+serveur -> client3 : réveil du client
+activate client3
+
+deactivate serveur
+deactivate client3
+
+end
+@enduml
