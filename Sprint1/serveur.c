@@ -5,16 +5,16 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#define TMAX 65000
+#define TMAX 65000 //taille maximum des paquets (en octets)
 
-//envoie d'un message
+//fonction pour envoyer un message
 int envoie(int SockE, char* message){
 	int taille = (strlen(message)+1)*sizeof(char);
 	int mes;
 
 	//Envoi de la taille du message
 	mes = send(SockE, &taille, sizeof(int), 0);
-	if (mes<0) {
+	if (mes == -1) {
 		perror("Erreur envoie octets\n");
 		return -1;
 	} else if (mes==0){
@@ -24,7 +24,7 @@ int envoie(int SockE, char* message){
 
 	//Envoi du message
 	mes = send(SockE, message, taille, 0);
-	if (mes<0){
+	if (mes == -1){
 		perror("Erreur envoie message\n");
 		return -1;
 	}
@@ -37,7 +37,7 @@ int envoie(int SockE, char* message){
 
 
 
-//reception d'un message
+//fonction pour recevoir un message
 int reception(int sockE, char* message){
 	int nb_octets;
 	int rec;
@@ -45,7 +45,7 @@ int reception(int sockE, char* message){
 
 	//Réception de la taille du message à recevoir
 	rec = recv(sockE, &nb_octets, sizeof(int), 0);
-	if (rec < 0){
+	if (rec == -1){
 		perror("Erreur reception\n");
 		return -1;
 	}
@@ -57,7 +57,7 @@ int reception(int sockE, char* message){
 	//Boucle pour recevoir toutes les portions du message
 	while(nb_recu < nb_octets){
 		rec = recv(sockE, message, nb_octets*sizeof(char), 0);
-		if (rec <0){
+		if (rec == -1){
 			perror("Erreur reception\n");
 			return -1;
 		}
@@ -75,22 +75,25 @@ int reception(int sockE, char* message){
 int main(int argc, char* argv[]) {
 	
 	if (argc != 2) {
-        perror("1 paramètre : \n\t1 : Numero de port");
+        perror("paramètres : ./serveur  Numero_de_port");
         exit(0);
     }
 
     int dS;
-	dS = socket(PF_INET, SOCK_STREAM, 0);
-	if (dS < 0) {
-		perror("Erreur socket");
+	dS = socket(PF_INET, SOCK_STREAM, 0); //création de la socket
+	if (dS == -1) {
+		perror("Erreur création socket");
 		exit(0);
 	}
 
+//structure de la socket
 	struct sockaddr_in ad;
     ad.sin_family = AF_INET;
     ad.sin_addr.s_addr = INADDR_ANY;
-    ad.sin_port = htons(atoi(argv[1]));
+    ad.sin_port = htons(atoi(argv[1])); //on récupère le port passé en paramètres, atoi permet de convertir une chaine de caractère en int
 
+
+//nomage de la socket
     int res;
     res = bind(dS, (struct sockaddr*)&ad,sizeof(struct sockaddr_in));
     if(res == -1){
@@ -98,8 +101,9 @@ int main(int argc, char* argv[]) {
         exit(0);
 	}
 
+//on passe la socket en écoute
 	res = listen(dS, 7);
-	if(res < 0) {
+	if(res == -1) {
 		perror("Erreur listen");
 		exit(0);
 	}
@@ -119,7 +123,7 @@ int main(int argc, char* argv[]) {
         }
         printf("Client 1 : Connexion OKK\n");
 
-        res = envoie(dSC1, "Vous êtes : Client 1... en attente de Client 2 ");
+        res = envoie(dSC1, "Vous êtes le Client 1 ... en attente de Client 2 \n");
 		if (res != 1){
 			return -1;
 		}
@@ -134,13 +138,13 @@ int main(int argc, char* argv[]) {
         }
         printf("Client 2 : Connexion OK\n");
 
-        res = envoie(dSC2, "Vous êtes : Client 2...");
+        res = envoie(dSC2, "Vous êtes le  Client 2.\n");
 		if (res != 1){
 			return -1;
 		}
 
 
-		//Début échange
+		//Début échange, on prévient le client 1
 		res = envoie(dSC1, "Vous pouvez envoyer un message");
 		if(res != 1){
 			return -1;
@@ -148,8 +152,8 @@ int main(int argc, char* argv[]) {
 
 
 		//Echange entre les 2 clients
-		int fin;
-		char msg[TMAX] = "";
+		int fin = 0; 
+		char msg[TMAX] = ""; 
 		while(fin != 1) {
 			//Serveur recoit le message du client 1
 			res = reception(dSC1, msg);
@@ -158,23 +162,26 @@ int main(int argc, char* argv[]) {
 			}
 
 			//Vérification si fin
-			if(strcmp(msg,"fin\n") == 0){
+			if(strcmp(msg,"fin\n") == 0){ //Si le message du client est "fin" alors l'échange est fini
 				fin = 1;
 			} else {
-				//Transmet msg de c1 à c2
+				//on transmet le message du client 1 au client 2
 				res = envoie(dSC2, msg);
 				if (res!=1){
 					return -1;
 				}
 				
+				//on reçoit le message du deuxième client
 				res = reception(dSC2, msg);
 				if (res!=1){
 					return -1;
 				}
 				
+				//on vérifie qu'il ne veut pas mettre fin à la conversation
 				if(strcmp(msg,"fin\n") == 0) {
 					fin = 1;
 				} else {
+					//on transmet son message à l'autre client
 					res = envoie(dSC1, msg);
 					if (res!=1){
 						return -1;
@@ -182,8 +189,8 @@ int main(int argc, char* argv[]) {
 				}
 			}
 		}
-
-		printf("Fin échange\n");
+//on prévient que l'échange est terminé et on ferme les sockets des clients
+		printf("Fin de l'échange\n");
 		close(dSC1);
 		close(dSC2);
 	}

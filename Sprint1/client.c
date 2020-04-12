@@ -5,15 +5,16 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#define TMAX 65000
+#define TMAX 65000 //taille maximum des paquets (en octets)
 
+//fonction pour envoyer un message
 int envoie(int SockE, char* message) {
 	int taille_msg = (strlen(message)+1)*sizeof(char);
 	int mes;
 
 	//Envoi de la taille du message
 	mes = send(SockE, &taille_msg, sizeof(int), 0);
-	if (mes<0){
+	if (mes == -1){
 		perror("Erreur envoie\n");
 		return -1;
 	}
@@ -24,7 +25,7 @@ int envoie(int SockE, char* message) {
 
 	//Envoi du message
 	mes = send(SockE, message, strlen(message)+1, 0);
-	if (mes < 0){
+	if (mes == -1){
 		perror("Erreur envoie\n");
 		return -1;
 	}
@@ -35,7 +36,7 @@ int envoie(int SockE, char* message) {
 	return 1;
 }
 
-
+//fonction pour recevoir un message
 int reception(int sockE, char* message){
 	int taille_msg;
 	int rec;
@@ -43,7 +44,7 @@ int reception(int sockE, char* message){
 
 	//Réception de la taille du message à recevoir
 	rec = recv(sockE, &taille_msg, sizeof(int), 0);
-	if (rec < 0){
+	if (rec == -1){
 		perror("Erreur reception\n");
 		return -1;
 	} else if (rec == 0) {
@@ -54,7 +55,7 @@ int reception(int sockE, char* message){
 	//Boucle pour recevoir toutes les portions du message
 	while(taille_rec < taille_msg){
 		rec = recv(sockE, message, taille_msg*sizeof(char), 0);
-		if (rec < 0){
+		if (rec == -1){
 			perror("Erreur reception\n");
 			return -1;
 		}
@@ -72,25 +73,26 @@ int reception(int sockE, char* message){
 int main(int argc, char* argv[]){ 
 
 	//Vérification des arguments
-	if(argc =! 3) {
-		printf("Il faut 2 paramètres :\n\t1 : Adresse IP\n\t2: Numéro de port\n");
+	if(argc != 3) {
+		printf("paramètres: ./client Adresse_IP  Numéro_de_port\n");
 		exit(0);
 	}
 
 	//definition de la socket
 	int dS;
 	dS = socket(PF_INET, SOCK_STREAM, 0);
-	if (dS < 0) {
+	if (dS == -1) {
 		perror("Erreur socket\n");
 		return -1;
 	}
 
+//structure de la socket
 	struct sockaddr_in aS;
 	aS.sin_family = AF_INET;
-	aS.sin_port = htons(atoi(argv[2]));
+	aS.sin_port = htons(atoi(argv[2])); //on récupère le port dans les arguments du terminal
 	
 	int res;
-	res = inet_pton(AF_INET, argv[1], &(aS.sin_addr));
+	res = inet_pton(AF_INET, argv[1], &(aS.sin_addr)); //on converti l'adresse IP décimale en binaire et on la stock dans aS.sin_addr pour ensuite désigner le destinataire
 	if (res<=0) {
 		perror("Erreur inet_pton\n");
 		return -1;
@@ -99,7 +101,7 @@ int main(int argc, char* argv[]){
 
 	socklen_t lgA = sizeof(aS);
 	res = connect(dS, (struct sockaddr *) &aS, lgA);
-	if (res < 0) {
+	if (res == -1) {
 		perror("Erreur connect\n");
 		return -1;
 	}
@@ -112,6 +114,7 @@ int main(int argc, char* argv[]){
 	}
 
 	while(1) {
+//on reçoit un message
 		res = reception(dS, msg);
 		if(res == -1) {
 			perror("Erreur reception");
@@ -121,10 +124,10 @@ int main(int argc, char* argv[]){
 			return -1;
 		}
 
-		if(strcmp(msg,"Vous êtes : Client 2\n") !=0 ) {
+		if(strcmp(msg,"Vous êtes le  Client 2.\n") !=0 ) { //pour que le client 1 envoie un message en premier 
 			printf("Votre message : ");
-			fgets(msg, TMAX, stdin);
-			res = envoie(dS, msg);
+			fgets(msg, TMAX, stdin); //saisie clavier du message
+			res = envoie(dS, msg); //envoie du message
 			if(res != 1) {
 				return -1;
 			}
