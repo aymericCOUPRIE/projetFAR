@@ -1,0 +1,12 @@
+13.04.2020 MATHOU
+j'ai commencé le sprint 2 du côté client, dans le main je ne fais que créer les différents threads qui activent les fonctions envoi et reception
+
+Modif par rapport au code du Sprint 1 :
+- envoi et réception sont maintenant de type void
+- la demande du contenu du message se fait dans la fonction envoie
+- la boucle infini se fait à l'interieur des fonctions
+- la socket est passé en argument mais se trouve être de type void *, il faut penser à la déférencer
+
+Difficultés rencontrées : Manipuler pthread_create et adapter la signature et le contenu des fonctions
+
+A faire : côté client à finir et côté serveur à démarrer (copié collé du sprint 1 déjà présent)
