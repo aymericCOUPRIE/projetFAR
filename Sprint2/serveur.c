@@ -68,3 +68,44 @@ int *reception(int sockE, char* message){
 	printf("Message reçu : %s\n", message);
 	return 1;
 }
+
+if (argc != 2) {
+        perror("paramètres : ./serveur  Numero_de_port");
+        exit(0);
+    }
+
+    int dS;
+	dS = socket(PF_INET, SOCK_STREAM, 0); //création de la socket
+	if (dS == -1) {
+		perror("Erreur création socket");
+		exit(0);
+	}
+
+//structure de la socket
+	struct sockaddr_in ad;
+    ad.sin_family = AF_INET;
+    ad.sin_addr.s_addr = INADDR_ANY;
+    ad.sin_port = htons(atoi(argv[1])); //on récupère le port passé en paramètres, atoi permet de convertir une chaine de caractère en int
+
+
+//nomage de la socket
+    int res;
+    res = bind(dS, (struct sockaddr*)&ad,sizeof(struct sockaddr_in));
+    if(res == -1){
+        perror("Erreur bind");
+        exit(0);
+	}
+
+//on passe la socket en écoute
+	res = listen(dS, 7);
+	if(res == -1) {
+		perror("Erreur listen");
+		exit(0);
+	}
+
+	struct sockaddr_in aC;
+	socklen_t lg = sizeof(struct sockaddr_in);
+
+	return (0);
+
+}
