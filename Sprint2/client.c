@@ -46,6 +46,8 @@ void *envoie(void *SockEv/*int SockE, char* message*/) {
     	}
 	}
 
+	pthread_exit(NULL);
+
 }
 
 //fonction pour recevoir un message
@@ -84,6 +86,8 @@ void *reception(void* sockEv /*int sockE, char* message*/){
     	}
     	printf("Message reçu : %s\n", msg);
 	}
+
+	pthread_exit(NULL);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
