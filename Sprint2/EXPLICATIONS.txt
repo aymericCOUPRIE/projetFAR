@@ -9,4 +9,4 @@ Modif par rapport au code du Sprint 1 :
 
 Difficultés rencontrées : Manipuler pthread_create et adapter la signature et le contenu des fonctions
 
-A faire : côté client à finir et côté serveur à démarrer (copié collé du sprint 1 déjà présent)
+ATTENTION: rajouter " -lpthread" à la fin de la commande pour compiler

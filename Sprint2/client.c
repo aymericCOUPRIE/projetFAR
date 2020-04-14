@@ -13,7 +13,7 @@ void *envoie(void *SockEv/*int SockE, char* message*/) {
 
     char msg[TMAX] = "";
 
-	int taille_msg = (strlen(msg)+1)*sizeof(char);
+	int taille_msg;
 	int mes;
 
 	int *SockE = SockEv;
@@ -22,7 +22,7 @@ void *envoie(void *SockEv/*int SockE, char* message*/) {
 	while (1){
 	    printf("Votre message : ");
         fgets(msg, TMAX, stdin); //saisie clavier du message
-
+		taille_msg = (strlen(msg)+1)*sizeof(char);
     	//Envoi de la taille du message
     	mes = send(*SockE, &taille_msg, sizeof(int), 0);
     	if (mes == -1){
@@ -143,7 +143,7 @@ int main(int argc, char* argv[]){
 //attente de la fin des threads
 
     pthread_join (threadEnvoi, NULL);
-    pthread_join threadReception, NULL);
+    pthread_join (threadReception, NULL);
 
     return 0;
 }
