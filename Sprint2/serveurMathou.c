@@ -76,10 +76,13 @@ void * transmission (void * args){
     printf("je suis dans transmission \n");
 
     int *sens = args;
+    printf ("POINT 1");
     int sockReception;
     int sockEnvoi;
     if (*sens == 0){
+        printf("initialisation sockeReception");
         sockReception = tabdSC[0];
+        printf("initialisation sockEnvoi");
         sockEnvoi = tabdSC[1];
     } else {
         sockReception = tabdSC[1];
@@ -182,29 +185,32 @@ int main(int argc, char* argv[]){
 			return -1;
 		}
 
+		int sens0 = 0;
+		int sens1 = 1;
+
 		//création des deux threads
         pthread_t thread0v1;
         pthread_t thread1v0;
 
         printf("initialisation des threads \n");
 
-        if (pthread_create(&thread0v1, NULL, transmission, (void *) 0) != 0){
+        if (pthread_create(&thread0v1, NULL, transmission, &sens0) != 0){
             perror("erreur creation thread\n");
             return -1;
         }
 
         printf("lancement du premier thread \n");
 
-        if (pthread_create(&thread1v0, NULL, transmission, (void *) 1) != 0){
+        /*if (pthread_create(&thread1v0, NULL, transmission, &sens1) != 0){
             perror("erreur creation thread\n");
             return -1;
-        }
+        }*/
 
         printf("lancement du second thread \n");
 
         //attente de la fin des threads
         pthread_join (thread0v1, NULL);
-        pthread_join (thread1v0, NULL);
+        //pthread_join (thread1v0, NULL);
 
 		//while(fin != 1) {
 			/*//Serveur recoit le message du client 1
