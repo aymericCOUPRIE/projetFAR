@@ -18,11 +18,11 @@ void *envoie(void *SockEv/*int SockE, char* message*/) {
 
 	int *SockE = SockEv;
 
-
 	while (1){
-	    printf("Votre message : ");
+
         fgets(msg, TMAX, stdin); //saisie clavier du message
 		taille_msg = (strlen(msg)+1)*sizeof(char);
+		printf("envoi du message %s \n", msg);
     	//Envoi de la taille du message
     	mes = send(*SockE, &taille_msg, sizeof(int), 0);
     	if (mes == -1){
@@ -94,13 +94,13 @@ void *reception(void* sockEv /*int sockE, char* message*/){
 
 int main(int argc, char* argv[]){
 
-//Vérification des arguments
+    //Vérification des arguments
 	if(argc != 3) {
 		printf("paramètres: ./client Adresse_IP  Numéro_de_port\n");
 		exit(0);
 	}
 
-//definition de la socket
+    //definition de la socket
 	int dS;
 	dS = socket(PF_INET, SOCK_STREAM, 0);
 	if (dS == -1) {
@@ -108,7 +108,7 @@ int main(int argc, char* argv[]){
 		return -1;
 	}
 
-//structure de la socket
+    //structure de la socket
 	struct sockaddr_in aS;
 	aS.sin_family = AF_INET;
 	aS.sin_port = htons(atoi(argv[2])); //on récupère le port dans les arguments du terminal
@@ -120,7 +120,7 @@ int main(int argc, char* argv[]){
 		return -1;
 	}
 
-//connexion au serveur
+    //connexion au serveur
 	socklen_t lgA = sizeof(aS);
 	res = connect(dS, (struct sockaddr *) &aS, lgA);
 	if (res == -1) {
@@ -128,9 +128,7 @@ int main(int argc, char* argv[]){
 		return -1;
 	}
 
-	char msg[TMAX] = "";
-
-//création des deux threads
+    //création des deux threads
     pthread_t threadEnvoi;
     pthread_t threadReception;
 
@@ -144,7 +142,7 @@ int main(int argc, char* argv[]){
         return -1;
     }
 
-//attente de la fin des threads
+    //attente de la fin des threads
 
     pthread_join (threadEnvoi, NULL);
     pthread_join (threadReception, NULL);
