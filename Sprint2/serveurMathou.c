@@ -25,7 +25,6 @@ int envoie(int SockE, char* message) {
 		perror("Socket fermée\n");
 		return 0;
 	}
-	printf("envoie d'un message de taille : %d \n", taille_msg);
 
 	//Envoi du message
 	mes = send(SockE, message, strlen(message)+1, 0);
@@ -37,7 +36,6 @@ int envoie(int SockE, char* message) {
 		perror("Aucun envoie\n");
 		return 0;
 	}
-	printf("message %s envoyé \n", message);
 
 	return 1;
 }
@@ -58,14 +56,9 @@ int reception(int sockE, char* message){
 		perror("Socket fermée\n");
 		return 0;
 	}
-    printf("reception d'un message de taille %d \n", nb_octets);
 
 	//Boucle pour recevoir toutes les portions du message
-	int i = 0;
 	while(nb_recu < nb_octets){
-
-	    i = i+1;
-	    printf ("je passe dans la boucle pour la %d eme fois \n", i);
 
 		rec = recv(sockE, message, nb_octets*sizeof(char), 0);
 		if (rec == -1){
@@ -78,8 +71,6 @@ int reception(int sockE, char* message){
 		}
 		nb_recu += rec;
 	}
-
-	printf("message %s reçu \n", message);
 
 	return 1;
 }
@@ -105,19 +96,19 @@ void * transmission (void * args){
             perror("err : recep dans trans");
             pthread_exit(NULL);
         }
-        printf("reception de %s \n", msg);
+
         if(strcmp(msg,"fin\n") == 0) {
 			fin = 1;
-		} else {
-		//on transmet son message à l'autre client
-		    printf("envoi du message %s \n", msg);
-			if (envoie(sockEnvoi, msg) != 1){
-			    perror("err : env dans trans");
-			    pthread_exit(NULL);
-			}
 		}
-		printf("valeur de fin : %d \n", fin);
+
+		//on transmet son message à l'autre client
+		if (envoie(sockEnvoi, msg) != 1){
+		    perror("err : env dans trans");
+		    pthread_exit(NULL);
+		}
+
     }
+    printf("je sors de la boucle transmission serveur \n");
     pthread_exit(NULL);
 }
 
@@ -221,42 +212,6 @@ int main(int argc, char* argv[]){
         //attente de la fin des threads
         pthread_join (thread0v1, NULL);
         pthread_join (thread1v0, NULL);
-
-		//while(fin != 1) {
-			/*//Serveur recoit le message du client 1
-			res = reception(dSC1, msg);
-			if (res != 1) {
-				return -1;
-			}
-
-			//Vérification si fin
-			if(strcmp(msg,"fin\n") == 0){ //Si le message du client est "fin" alors l'échange est fini
-				fin = 1;
-			} else {
-				//on transmet le message du client 1 au client 2
-				res = envoie(dSC2, msg);
-				if (res!=1){
-					return -1;
-				}
-
-				//on reçoit le message du deuxième client
-				res = reception(dSC2, msg);
-				if (res!=1){
-					return -1;
-				}
-
-				//on vérifie qu'il ne veut pas mettre fin à la conversation
-				if(strcmp(msg,"fin\n") == 0) {
-					fin = 1;
-				} else {
-					//on transmet son message à l'autre client
-					res = envoie(dSC1, msg);
-					if (res!=1){
-						return -1;
-					}
-				}
-			}
-		}*/
 
         //on prévient que l'échange est terminé et on ferme les sockets des clients
 		printf("Fin de l'échange\n");

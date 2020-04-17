@@ -17,14 +17,12 @@ void *envoie(void *SockEv/*int SockE, char* message*/) {
 	int mes;
 
 	int *SockE = SockEv;
+	int fin = 0;
 
-	while (1){
+	while (fin == 0){
 
         fgets(msg, TMAX, stdin); //saisie clavier du message
 		taille_msg = (strlen(msg)+1)*sizeof(char);
-
-		printf("envoi du message %s \n", msg);
-		printf("la taille du message vaut : %d \n", taille_msg);
 
     	//Envoi de la taille du message
     	mes = send(*SockE, &taille_msg, sizeof(int), 0);
@@ -47,10 +45,15 @@ void *envoie(void *SockEv/*int SockE, char* message*/) {
     		perror("Aucun envoie\n");
     		exit(0);
     	}
-	}
 
+    	if (strcmp(msg,"fin\n") == 0){
+    	    fin = 1;
+    	}
+
+    }
+
+	close(*SockE);
 	pthread_exit(NULL);
-
 }
 
 //fonction pour recevoir un message
@@ -62,8 +65,9 @@ void *reception(void* sockEv /*int sockE, char* message*/){
 	char msg[TMAX] = "";
 
 	int *sockE = sockEv;
+	int fin = 0;
 
-	while (1) {
+	while (fin == 0) {
 	    //Réception de la taille du message à recevoir
     	rec = recv(*sockE, &taille_msg, sizeof(int), 0);
     	if (rec == -1){
@@ -73,8 +77,6 @@ void *reception(void* sockEv /*int sockE, char* message*/){
     		perror("Aucun message recu\n");
     		exit (0);
     	}
-    	printf("la taille du message vaut : %d \n", taille_msg);
-    	printf("point repère");
 
     	taille_rec = 0;
 
@@ -90,12 +92,15 @@ void *reception(void* sockEv /*int sockE, char* message*/){
     			exit (0);
     		}
     		taille_rec += rec;
-    		printf("afficher taille reçu : rec = %d et taille_rec = %d", rec, taille_rec);
     	}
     	printf("Message reçu : %s\n", msg);
+
+    	if (strcmp(msg,"fin\n") == 0){
+            fin = 1;
+        }
 	}
 
-	pthread_exit(NULL);
+    close(*sockE);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -152,8 +157,9 @@ int main(int argc, char* argv[]){
 
     //attente de la fin des threads
 
-    pthread_join (threadEnvoi, NULL);
-    pthread_join (threadReception, NULL);
+    if (pthread_join (threadReception, NULL) == 0 || pthread_join (threadEnvoi, NULL) == 0) {
+        printf("on sort");
+    }
 
     return 0;
 }
