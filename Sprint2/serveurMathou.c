@@ -11,6 +11,7 @@ int tabdSC[10] ;
 
 //fonction pour envoyer un message
 int envoie(int SockE, char* message) {
+
 	int taille_msg = (strlen(message)+1)*sizeof(char);
 	int mes;
 
@@ -24,6 +25,7 @@ int envoie(int SockE, char* message) {
 		perror("Socket fermée\n");
 		return 0;
 	}
+	printf("envoie d'un message de taille : %d \n", taille_msg);
 
 	//Envoi du message
 	mes = send(SockE, message, strlen(message)+1, 0);
@@ -35,6 +37,8 @@ int envoie(int SockE, char* message) {
 		perror("Aucun envoie\n");
 		return 0;
 	}
+	printf("message %s envoyé \n", message);
+
 	return 1;
 }
 
@@ -54,9 +58,15 @@ int reception(int sockE, char* message){
 		perror("Socket fermée\n");
 		return 0;
 	}
+    printf("reception d'un message de taille %d \n", nb_octets);
 
 	//Boucle pour recevoir toutes les portions du message
+	int i = 0;
 	while(nb_recu < nb_octets){
+
+	    i = i+1;
+	    printf ("je passe dans la boucle pour la %d eme fois \n", i);
+
 		rec = recv(sockE, message, nb_octets*sizeof(char), 0);
 		if (rec == -1){
 			perror("Erreur reception\n");
@@ -68,28 +78,25 @@ int reception(int sockE, char* message){
 		}
 		nb_recu += rec;
 	}
+
+	printf("message %s reçu \n", message);
+
 	return 1;
 }
 
 void * transmission (void * args){
 
-    printf("je suis dans transmission \n");
-
     int *sens = args;
-    printf ("POINT 1");
+    int sensTest = *sens;
     int sockReception;
     int sockEnvoi;
-    if (*sens == 0){
-        printf("initialisation sockeReception");
+    if (sensTest == 0){
         sockReception = tabdSC[0];
-        printf("initialisation sockEnvoi");
         sockEnvoi = tabdSC[1];
     } else {
         sockReception = tabdSC[1];
         sockEnvoi = tabdSC[0];
     }
-
-    printf("j'ai initialisé sock's \n");
 
     char msg[TMAX] = "";
     int fin = 0;
@@ -98,15 +105,18 @@ void * transmission (void * args){
             perror("err : recep dans trans");
             pthread_exit(NULL);
         }
+        printf("reception de %s \n", msg);
         if(strcmp(msg,"fin\n") == 0) {
 			fin = 1;
 		} else {
 		//on transmet son message à l'autre client
+		    printf("envoi du message %s \n", msg);
 			if (envoie(sockEnvoi, msg) != 1){
 			    perror("err : env dans trans");
 			    pthread_exit(NULL);
 			}
 		}
+		printf("valeur de fin : %d \n", fin);
     }
     pthread_exit(NULL);
 }
@@ -161,10 +171,10 @@ int main(int argc, char* argv[]){
         }
         printf("Client 1 : Connexion OK\n");
 
-        res = envoie(tabdSC[0], "Vous êtes le Client 1 ... en attente de Client 2 \n");
+        /*res = envoie(tabdSC[0], "Vous êtes le Client 1 ... en attente de Client 2 \n");
 		if (res != 1){
 			return -1;
-		}
+		}*/
 
 		//Connexion client 2
 		tabdSC[1] = accept(dS, (struct sockaddr*) &aC,&lg);
@@ -174,7 +184,7 @@ int main(int argc, char* argv[]){
         }
         printf("Client 2 : Connexion OK\n");
 
-        res = envoie(tabdSC[1], "Vous êtes le  Client 2.\n");
+        /*res = envoie(tabdSC[1], "Vous êtes le  Client 2.\n");
 		if (res != 1){
 			return -1;
 		}
@@ -183,7 +193,7 @@ int main(int argc, char* argv[]){
 		res = envoie(tabdSC[0], "Vous pouvez envoyer un message");
 		if(res != 1){
 			return -1;
-		}
+		}*/
 
 		int sens0 = 0;
 		int sens1 = 1;
@@ -201,16 +211,16 @@ int main(int argc, char* argv[]){
 
         printf("lancement du premier thread \n");
 
-        /*if (pthread_create(&thread1v0, NULL, transmission, &sens1) != 0){
+        if (pthread_create(&thread1v0, NULL, transmission, &sens1) != 0){
             perror("erreur creation thread\n");
             return -1;
-        }*/
+        }
 
         printf("lancement du second thread \n");
 
         //attente de la fin des threads
         pthread_join (thread0v1, NULL);
-        //pthread_join (thread1v0, NULL);
+        pthread_join (thread1v0, NULL);
 
 		//while(fin != 1) {
 			/*//Serveur recoit le message du client 1

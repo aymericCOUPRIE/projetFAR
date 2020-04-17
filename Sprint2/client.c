@@ -22,7 +22,10 @@ void *envoie(void *SockEv/*int SockE, char* message*/) {
 
         fgets(msg, TMAX, stdin); //saisie clavier du message
 		taille_msg = (strlen(msg)+1)*sizeof(char);
+
 		printf("envoi du message %s \n", msg);
+		printf("la taille du message vaut : %d \n", taille_msg);
+
     	//Envoi de la taille du message
     	mes = send(*SockE, &taille_msg, sizeof(int), 0);
     	if (mes == -1){
@@ -70,6 +73,10 @@ void *reception(void* sockEv /*int sockE, char* message*/){
     		perror("Aucun message recu\n");
     		exit (0);
     	}
+    	printf("la taille du message vaut : %d \n", taille_msg);
+    	printf("point repère");
+
+    	taille_rec = 0;
 
     	//Boucle pour recevoir toutes les portions du message
     	while(taille_rec < taille_msg){
@@ -83,6 +90,7 @@ void *reception(void* sockEv /*int sockE, char* message*/){
     			exit (0);
     		}
     		taille_rec += rec;
+    		printf("afficher taille reçu : rec = %d et taille_rec = %d", rec, taille_rec);
     	}
     	printf("Message reçu : %s\n", msg);
 	}
