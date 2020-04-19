@@ -9,7 +9,7 @@
 #define TMAX 65000 //taille maximum des paquets (en octets)
 #define nbrClientMax 200
 int tabdSC[200] ; //tableau de 200 sockets
-char pseudos[200];
+char pseudos[200][10];
 int nbrClient;
 pthread_t thread[nbrClientMax];
 
@@ -85,16 +85,14 @@ int reception(int sockE, char* message){
 
 //fonction pour récupérer le pseudo
 void recuperer_pseudo (char *pseudo, int i){
-    if (reception(tabdSC[i], &pseudo[i]) != 1) {
+    if (reception(tabdSC[i], pseudo) != 1) {
         perror("err: recupération pseudo");
-        strcpy(&pseudos[i], "inconnu");
+        strcpy(pseudos[i], "inconnu");
     }
 }
 
 //fonction pour la transmission des messages
 void * transmission (void * args){
-
-
 
     printf("je suis dans transmission \n");
 
@@ -115,7 +113,7 @@ void * transmission (void * args){
 
 		//on met le pseudo au debut du message avant de le transmettre
 		char newMsg[TMAX];
-		strcpy(newMsg, &pseudos[i]);
+		strcpy(newMsg, pseudos[i]);
 		strcat(newMsg, ":");
 		strcat(newMsg, msg);
 
@@ -156,8 +154,8 @@ void * connexion (void * args){
 
             printf ("j'ai accepté un nouveau client \n");
 
-            recuperer_pseudo (pseudos, i);
-            printf("client numéro %d connecté avec le pseudo %s \n", i+1, &pseudos[i]);
+            recuperer_pseudo (pseudos[i], i);
+            printf("client numéro %d connecté avec le pseudo %s \n", i+1, pseudos[i]);
 
             if (pthread_create(&thread[i], NULL, transmission, &i ) != 0){
                 perror("creation de thread[i]");
