@@ -12,6 +12,7 @@
 int tabdSC[200] ; //tableau de 200 sockets
 char pseudos[200][10];
 int nbrClient;
+int fin = 0;
 pthread_t thread[nbrClientMax];
 
 //fonction pour envoyer un message
@@ -94,7 +95,6 @@ void * transmission (void * args){
     int *recupVoid = args;
     int i = *recupVoid;
     char msg[TMAX] = "";
-    int fin = 0;
 
     while(fin != 1){
         if (reception(tabdSC[i], msg) != 1){
@@ -141,7 +141,7 @@ void * connexion (void * args){
     int i = 0;
     int j = 0;
 
-    while (nbrClient < nbrClientMax) {
+    while (nbrClient < nbrClientMax && fin == 0) {
 
             tabdSC[i] = accept(dS, (struct sockaddr*) &aC,&lg);
             if(tabdSC[i] == -1){
@@ -155,15 +155,14 @@ void * connexion (void * args){
             printf("client numéro %d connecté avec le pseudo %s \n", i+1, pseudos[i]);
 
             j = i;
-            nbrClient = nbrClient + 1;
             i = i + 1;
-            printf("nombre client = %d \n", nbrClient);
 
             if (pthread_create(&thread[j], NULL, transmission, &j ) != 0){
                 perror("creation de thread[i]");
                 pthread_exit(NULL);
             } else {
-
+                nbrClient = nbrClient + 1;
+                printf("nombre client = %d \n", nbrClient);
             }
     }
 
@@ -223,32 +222,34 @@ int main(int argc, char* argv[]){
 
 	nbrClient = 0;
 
-	while(1) {
-		printf("En attente de connexion des clients\n");
+    printf("En attente de connexion des clients\n");
 
-		//Connexion client
-		pthread_t threadConnexion;
-		if (pthread_create (&threadConnexion, NULL, connexion, &dS) != 0){
-		    perror("erreur création thread");
-		    return -1;
-		}
+    //Connexion client
+    pthread_t threadConnexion;
+    if (pthread_create (&threadConnexion, NULL, connexion, &dS) != 0){
+        perror("erreur création thread");
+        return -1;
+    }
 
-        //attente de la fin des threads
-        pthread_join (threadConnexion, NULL);
+    while (nbrClient == 0){
+        //..
+    }
 
-        //on ferme les threads et les sockets des clients
-        for (long i = 0; i < nbrClient; i++) {
-        	pthread_cancel(thread[i]); //ferme le thread du client i
-        	close(tabdSC[i]);		    //ferme la socket du client i
-        }
+    //attente de la fin des threads
+    pthread_join (thread[0], NULL);
 
-        pthread_cancel(threadConnexion); //on ferme la socket de connexion
-        printf("Fin de la discution \n");
+    //on ferme les threads et les sockets des clients
+    for (long i = 0; i < nbrClient; i++) {
+        pthread_cancel(thread[i]); //ferme le thread du client i
+        close(tabdSC[i]);		    //ferme la socket du client i
+    }
 
-        //on prévient que l'échange est terminé et on ferme les sockets des clients
-		printf("Fin de l'échange\n");
+    pthread_cancel(threadConnexion); //on ferme la socket de connexion
+    printf("Fin de la discution \n");
 
-	}
+    //on prévient que l'échange est terminé et on ferme les sockets des clients
+	printf("Fin de l'échange\n");
+
 	close(dS);
 	return 0;
 
