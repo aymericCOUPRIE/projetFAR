@@ -7,291 +7,250 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #define TMAX 65000 //taille maximum des paquets (en octets)
-#define nbClientsMax 200
-int dSC[200]; //tableau de 200 sockets
-char pseudos[200][200];
-int nbclients;
-pthread_t thread[nbClientsMax];
+#define nbrClientMax 200
 
-//fonction pour récupérer et stocker les pseudo
-void recuperer_pseudo(char *pseudo, int i)
-{
+int tabdSC[200] ; //tableau de 200 sockets
+char pseudos[200][10];
+int nbrClient;
+int fin = 0;
+pthread_t thread[nbrClientMax];
 
-    printf("je suis dans récupérer pseudo \n");
-	int taillemessage;
-	//on récupère le nombre d'octets du paquets où il y a le pseudo
-	int res = recv(dSC[i], &taillemessage, sizeof(int), 0);
-	if (res == -1)
-	{
-		perror("Erreur reception taille pseudo");
-		pthread_exit(NULL);
+//fonction pour envoyer un message
+int envoie(int SockE, char* message) {
+
+	int taille_msg = (strlen(message)+1)*sizeof(char);
+	int mes;
+
+	//Envoi de la taille du message
+	mes = send(SockE, &taille_msg, sizeof(int), 0);
+	if (mes == -1){
+		perror("Erreur envoie\n");
+		return -1;
 	}
-	if (res == 0)
-	{
-		perror("Socket fermée lors de la reception de la taille du pseudo\n");
-		pthread_exit(NULL);
-	}
-
-    printf("j'ai récupéré la taille du pseudo \n");
-    printf("la taille du pseudo vaut %d \n", taillemessage);
-
-	//on récupère le pseudo par morceaux
-	int nbrecu = 0;
-	while (nbrecu < taillemessage)
-	{
-		res = recv(dSC[i], pseudo, taillemessage * sizeof(char), 0);
-		if (res == -1)
-		{
-			perror("Erreur reception  pseudo\n");
-			pthread_exit(NULL);
-		}
-		if (res == 0)
-		{
-			perror("Socket fermée lors de la reception du pseudo\n");
-			pthread_exit(NULL);
-		}
-		nbrecu += res;
+	if (mes==0){
+		perror("Socket fermée\n");
+		return 0;
 	}
 
-	printf("j'ai récupéré le pseudo \n");
-	printf("voici le pseudo %s", pseudo);
+	//Envoi du message
+	mes = send(SockE, message, strlen(message)+1, 0);
+	if (mes == -1){
+		perror("Erreur envoie\n");
+		return -1;
+	}
+	if (mes == 0){
+		perror("Aucun envoie\n");
+		return 0;
+	}
 
-	//On stocke tous les pseudos dans un tableau
-	strcpy(pseudos[i], pseudo);
-	printf("j'ai copié le pseudo \n");
+	return 1;
 }
 
-void *transmission(void *args)
-{
-    printf("je suis dans transmission");
+//fonction pour recevoir un message
+int reception(int sockE, char* message){
 
-    int *pointeur = args;
-	int i = *pointeur; //numéro de la socket du client qui envoit le message
-	char message[TMAX]; //message d'un client
-	int fin = 0;		//signal de fin
-	int taille_msg;
-	int rec; //pour faire test des fonctions
+	int nb_octets;
+	int rec;
+	int nb_recu = 0;
 
-	while (fin != 1)
-	{
-		//on reçoit la taille d'un message d'un client
-
-		rec = recv(dSC[i], &taille_msg, sizeof(int), 0);
-		if (rec == -1)
-		{
-			perror("Erreur reception taille message\n");
-			pthread_exit(NULL);
-		}
-		else if (rec == 0)
-		{
-			perror("Socket fermée reception taille message\n");
-			pthread_exit(NULL);
-		}
-		
-		int taille_rec = 0; //taille de ce qu'on a reçu du message
-		//Boucle pour recevoir toutes les portions du message
-		while (taille_rec < taille_msg)
-		{
-			rec = recv(dSC[i], message, taille_msg * sizeof(char), 0);
-			if (rec == -1)
-			{
-				perror("Erreur reception message\n");
-				pthread_exit(NULL);
-			}
-			if (rec == 0)
-			{
-				perror("Socket fermée reception message\n");
-				pthread_exit(NULL);
-			}
-			taille_rec += rec;
-		}
-
-		//on vérifie si le client veut mettre fin à la conversation
-		if (strcmp(message, "fin\n") == 0)
-		{ //si il veut mettre fin à la conversation
-			//on envoit la taille du mot "fin"
-			rec = send(dSC[i], &taille_msg, sizeof(int), 0);
-			if (rec == -1)
-			{
-				perror("Erreur envoie taille fin \n");
-				pthread_exit(NULL);
-			}
-			if (rec == 0)
-			{
-				perror("Socket fermée envoie taille fin\n");
-				pthread_exit(NULL);
-			}
-			//on envoit le mot "fin"
-			rec = send(dSC[i], message, taille_msg, 0);
-			if (rec == -1)
-			{
-				perror("Erreur envoie message fin\n");
-				pthread_exit(NULL);
-			}
-			if (rec == 0)
-			{
-				perror("Socket fermée envoie message fin\n");
-				pthread_exit(NULL);
-			}
-		}
-
-		//on met le pseudo au début du message avant de le transmettre
-		char newmessage[TMAX];
-		strcpy(newmessage, pseudos[i]); //copie le pseudo dans newmessage
-		strcat(newmessage, " : ");		//concatène ":" après newmessage dans newmessage
-		strcat(newmessage, message);	//concatene message à newmessage
-		strcpy(message, newmessage);	//copie new message dans message
-		//on met à jout la nouvelle taille du message
-		taille_msg = (strlen(message) + 1) * sizeof(char);
-
-		//envoie du message aux autres clients sauf à celui qui l'a envoyé (i)
-		for (int j = 0; j < nbclients; j++)
-		{
-			if (j != i)
-			{
-				/* envoie du nbre d'octets du paquet contenant le message */
-				rec = send(dSC[j], &taille_msg, sizeof(int), 0);
-				if (rec == -1)
-				{
-					perror("Erreur envoie taille message\n");
-					pthread_exit(NULL);
-				}
-				else if (rec == 0)
-				{
-					perror("Socket fermée recption taille \n");
-					pthread_exit(NULL);
-				}
-
-				rec = send(dSC[j], message, taille_msg, 0); /* envoie du message*/
-				if (rec == -1)
-				{
-					perror("Erreur envoie message\n");
-					pthread_exit(NULL);
-				}
-				if (rec == 0)
-				{
-					perror("Socket fermée envoie message\n");
-					pthread_exit(NULL);
-				}
-			}
-			pthread_exit(NULL);
-		}
+	//Réception de la taille du message à recevoir
+	rec = recv(sockE, &nb_octets, sizeof(int), 0);
+	if (rec == -1){
+		perror("Erreur 1ere reception\n");
+		return -1;
 	}
+	if (rec == 0){
+		perror("Socket fermée\n");
+		return 0;
+	}
+
+	//Boucle pour recevoir toutes les portions du message
+	while(nb_recu < nb_octets){
+		rec = recv(sockE, message, nb_octets*sizeof(char), 0);
+		if (rec == -1){
+			perror("Erreur 2eme reception\n");
+			return -1;
+		}
+		if (rec == 0) {
+			perror("Socket fermée\n");
+			return 0;
+		}
+		nb_recu += rec;
+	}
+
+	return 1;
 }
 
-//fonction pour que les clients se connectent à n'importe quel moment de la connexion
-void *connexion(void *arg)
-{
-	//nbclients = 0;
-	int *dSEv = arg;
-	int dSE = *dSEv;
-	struct sockaddr_in aC;
-	socklen_t lg = sizeof(struct sockaddr_in);
-	int i = 0;
-	while (1)
-	{
-		if (i < nbClientsMax)
-		{
-			dSC[i] = accept(dSE, (struct sockaddr *)&aC, &lg);
-			if (dSC[i] == -1)
-			{
-				perror("Probleme accept d'un client");
-				pthread_exit(NULL);
-			}
-			printf("client connecté \n");
-			recuperer_pseudo(pseudos[i], i);
-			printf("Client numéro  %d connecté avec le pseudo ' %s' \n", i + 1, pseudos[i]);
-			if (pthread_create(&thread[i], NULL, transmission, &i))
-			{
-				perror("creation threadGet erreur");
-				pthread_exit(NULL);
-			}
-			printf("je suis après le thread");
-			nbclients += 1;
-			i++;
-			printf("nbclients : %d", nbclients);
-		}
-	}
-	pthread_exit(NULL);
+//fonction pour récupérer le pseudo
+void recuperer_pseudo (char *pseudo, int i){
+    if (reception(tabdSC[i], pseudo) != 1) {
+        perror("err: recupération pseudo");
+        strcpy(pseudos[i], "inconnu");
+    }
 }
 
-int main(int argc, char *argv[])
-{
-	if (argc != 2)
-	{
-		perror("paramètres : ./serveur  Numero_de_port");
+//fonction pour la transmission des messages
+void * transmission (void * args){
+
+    int *recupVoid = args;
+    int i = *recupVoid;
+    char msg[TMAX] = "";
+
+    while(fin != 1){
+        if (reception(tabdSC[i], msg) != 1){
+            perror("err : recep dans trans");
+            pthread_exit(NULL);
+        }
+
+        if(strcmp(msg,"fin\n") == 0) {
+			fin = 1;
+		}
+
+		//on met le pseudo au debut du message avant de le transmettre
+		char newMsg[TMAX];
+		strcpy(newMsg, pseudos[i]);
+		strcat(newMsg, ":");
+		strcat(newMsg, msg);
+
+        int j = 0;
+        while (j < nbrClient){
+            if (i != j){
+            //on transmet son message à l'autre client
+                if (envoie(tabdSC[j], newMsg) != 1){
+	                perror("err : env dans trans");
+	                pthread_exit(NULL);
+                }
+            }
+            j = j+1;
+        }
+    }
+    printf("je sors de la boucle transmission serveur \n");
+    pthread_exit(NULL);
+}
+
+
+//fonction de connexion
+void * connexion (void * args){
+
+    int * pointeur = args;
+    int dS = *pointeur;
+
+    struct sockaddr_in aC;
+    socklen_t lg = sizeof(struct sockaddr_in);
+
+    int i = 0;
+    int j = 0;
+
+    while (nbrClient < nbrClientMax && fin == 0) {
+
+            tabdSC[i] = accept(dS, (struct sockaddr*) &aC,&lg);
+            if(tabdSC[i] == -1){
+                perror("Erreur accept client \n");
+                pthread_exit(NULL);
+            }
+
+            printf ("j'ai accepté un nouveau client \n");
+
+            recuperer_pseudo (pseudos[i], i);
+            printf("client numéro %d connecté avec le pseudo %s \n", i+1, pseudos[i]);
+
+            j = i;
+            i = i + 1;
+
+            if (pthread_create(&thread[j], NULL, transmission, &j ) != 0){
+                perror("creation de thread[i]");
+                pthread_exit(NULL);
+            } else {
+                nbrClient = nbrClient + 1;
+                printf("nombre client = %d \n", nbrClient);
+            }
+    }
+
+    printf("j'attend le thread 1 \n");
+    pthread_join(thread[0], NULL);
+
+    printf("j'ai passé le join \n");
+    pthread_exit (NULL);
+
+}
+
+int main(int argc, char* argv[]){
+
+    //initialisation du tabdSC à -1;
+    int i = 0;
+    while (i < nbrClientMax){
+        tabdSC[i] = -1;
+        i = i+1;
+    }
+
+    if (argc != 2) {
+        perror("paramètres : ./serveur  Numero_de_port");
+        exit(0);
+    }
+
+    int dS;
+	dS = socket(PF_INET, SOCK_STREAM, 0); //création de la socket
+	if (dS == -1) {
+		perror("Erreur création socket");
 		exit(0);
 	}
 
-	int dS = socket(PF_INET, SOCK_STREAM, 0); //création de la socket
-	if (dS == -1)
-	{
-		perror("Erreur création socket\n");
-		exit(0);
-	}
-
-	//structure de la socket
+    //structure de la socket
 	struct sockaddr_in ad;
-	ad.sin_family = AF_INET;
-	ad.sin_addr.s_addr = INADDR_ANY;
-	ad.sin_port = htons(atoi(argv[1])); //on récupère le port passé en paramètres, atoi permet de convertir une chaine de caractère en int
+    ad.sin_family = AF_INET;
+    ad.sin_addr.s_addr = INADDR_ANY;
+    ad.sin_port = htons(atoi(argv[1])); //on récupère le port passé en paramètres, atoi permet de convertir une chaine de caractère en int
 
-	//nomage de la socket
-	int res = bind(dS, (struct sockaddr *)&ad, sizeof(struct sockaddr_in));
-	if (res == -1)
-	{
-		perror("Erreur bind\n");
-		exit(0);
+
+    //nomage de la socket
+    int res;
+    res = bind(dS, (struct sockaddr*)&ad,sizeof(struct sockaddr_in));
+    if(res == -1){
+        perror("Erreur bind");
+        exit(0);
 	}
 
-	//on passe la socket en écoute
+    //on passe la socket en écoute
 	res = listen(dS, 7);
-	if (res == -1)
-	{
-		perror("Erreur listen\n");
+	if(res == -1) {
+		perror("Erreur listen");
 		exit(0);
 	}
 
 	struct sockaddr_in aC;
 	socklen_t lg = sizeof(struct sockaddr_in);
 
-	while (1)
-	{
-		nbclients = 0;
-		printf("En attente de connexion de clients\n");
+	nbrClient = 0;
 
-		//Connexion client
-		pthread_t connexionClient; //thread pour connecter un client
-		if (pthread_create(&connexionClient, NULL, connexion, &dS))
-		{
-			perror("Erreur création thread connexionClient");
-			return EXIT_FAILURE;
-		}
+    printf("En attente de connexion des clients\n");
 
-		//On attend qu'il y ait au moins 2 client
-		while (nbclients <= 1)
-		{
-			//....
-		}
+    //Connexion client
+    pthread_t threadConnexion;
+    if (pthread_create (&threadConnexion, NULL, connexion, &dS) != 0){
+        perror("erreur création thread");
+        return -1;
+    }
 
-		printf("Debut de la discussion\n");
+    while (nbrClient == 0){
+        //..
+    }
 
-		if (pthread_join(thread[0], NULL))
-		{ //pthread_join attend que le thread du client se ferme
-			perror("Erreur pthread_join ");
-			return EXIT_FAILURE;
-		}
+    //attente de la fin des threads
+    pthread_join (thread[0], NULL);
 
-		//on ferme les threads et les sockets des clients
-		for (long i = 0; i < nbclients; i++)
-		{
-			pthread_cancel(thread[i]); //ferme le thread du client i
-			close(dSC[i]);			   //ferme la socket du client i
-		}
-		pthread_cancel(connexionClient); //on ferme la socket de connexion
-		printf("Fin de la discution \n");
-	}
-	close(dS); //ferme la socket d'écoute
+    //on ferme les threads et les sockets des clients
+    for (long i = 0; i < nbrClient; i++) {
+        pthread_cancel(thread[i]); //ferme le thread du client i
+        close(tabdSC[i]);		    //ferme la socket du client i
+    }
 
+    pthread_cancel(threadConnexion); //on ferme la socket de connexion
+    printf("Fin de la discution \n");
+
+    //on prévient que l'échange est terminé et on ferme les sockets des clients
+	printf("Fin de l'échange\n");
+
+	close(dS);
 	return 0;
+
 }
