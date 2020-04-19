@@ -16,6 +16,8 @@ pthread_t thread[nbClientsMax];
 //fonction pour récupérer et stocker les pseudo
 void recuperer_pseudo(char *pseudo, int i)
 {
+
+    printf("je suis dans récupérer pseudo \n");
 	int taillemessage;
 	//on récupère le nombre d'octets du paquets où il y a le pseudo
 	int res = recv(dSC[i], &taillemessage, sizeof(int), 0);
@@ -48,7 +50,7 @@ void recuperer_pseudo(char *pseudo, int i)
 		nbrecu += res;
 	}
 	//On stocke tous les pseudos dans un tableau
-	strcpy(pseudos[i], &pseudo);
+	strcpy(pseudos[i], pseudo);
 }
 
 void *transmission(void *args)
@@ -169,7 +171,8 @@ void *transmission(void *args)
 void *connexion(void *arg)
 {
 	//nbclients = 0;
-	int dSE = (long)arg;
+	int *dSEv = arg;
+	int dSE = *dSEv;
 	struct sockaddr_in aC;
 	char pseudos[200];
 	socklen_t lg = sizeof(struct sockaddr_in);
@@ -184,9 +187,10 @@ void *connexion(void *arg)
 				perror("Probleme accept d'un client");
 				pthread_exit(NULL);
 			}
+			printf("client connecté \n");
 			recuperer_pseudo(pseudos, i);
 			printf("Client numéro  %d connecté avec le pseudo ' %c' \n", i + 1, pseudos[i]);
-			if (pthread_create(&thread[i], NULL, transmission, (void *)i))
+			if (pthread_create(&thread[i], NULL, transmission, &i))
 			{
 				perror("creation threadGet erreur");
 				pthread_exit(NULL);
@@ -246,7 +250,7 @@ int main(int argc, char *argv[])
 
 		//Connexion client
 		pthread_t connexionClient; //thread pour connecter un client
-		if (pthread_create(&connexionClient, NULL, connexion, (void *)dS))
+		if (pthread_create(&connexionClient, NULL, connexion, &dS))
 		{
 			perror("Erreur création thread connexionClient");
 			return EXIT_FAILURE;

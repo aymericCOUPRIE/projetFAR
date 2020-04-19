@@ -9,7 +9,8 @@
 
 #define TMAX 65000 //taille maximum des paquets (en octets)
 
-//Fonction qui envoie le pseudo au serveur pour au'il le stock
+
+//Fonction qui envoie le pseudo au serveur pour qu'il le stock
 void *envoiepseudo(char *pseudo, void *SockEv)
 {
 	int *SockE = SockEv;
@@ -177,6 +178,7 @@ int main(int argc, char *argv[])
 		perror("Erreur connect\n");
 		return -1;
 	}
+
 	//demande pseudo
 	char pseudo[200];
 	printf("Saisir votre pseudo: \n");
@@ -204,9 +206,9 @@ int main(int argc, char *argv[])
 	}
 
 	//attente de la fin des threads
-
 	pthread_join(threadEnvoi, NULL);
 	pthread_join(threadReception, NULL);
+
 	//ferme la socket
 	close(dS);
 	return 0;
