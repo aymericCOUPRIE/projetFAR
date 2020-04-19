@@ -101,6 +101,8 @@ void * transmission (void * args){
     char msg[TMAX] = "";
     int fin = 0;
 
+    printf("la valeur de i = %d \n", i);
+
     while(fin != 1){
         if (reception(tabdSC[i], msg) != 1){
             perror("err : recep dans trans");
@@ -157,15 +159,16 @@ void * connexion (void * args){
             recuperer_pseudo (pseudos[i], i);
             printf("client numéro %d connecté avec le pseudo %s \n", i+1, pseudos[i]);
 
+            printf("i dans transmission = %d \n", i);
+
             if (pthread_create(&thread[i], NULL, transmission, &i ) != 0){
                 perror("creation de thread[i]");
                 pthread_exit(NULL);
+            } else {
+                nbrClient = nbrClient + 1;
+                i = i + 1;
+                printf("nombre client = %d \n", nbrClient);
             }
-
-            nbrClient = nbrClient + 1;
-            i = i + 1;
-            printf("nombre client = %d \n", nbrClient);
-
     }
 
     pthread_join(thread[0], NULL);
