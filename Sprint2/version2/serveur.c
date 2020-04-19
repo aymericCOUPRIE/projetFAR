@@ -32,11 +32,14 @@ void recuperer_pseudo(char *pseudo, int i)
 		pthread_exit(NULL);
 	}
 
+    printf("j'ai récupéré la taille du pseudo \n");
+    printf("la taille du pseudo vaut %d \n", taillemessage);
+
 	//on récupère le pseudo par morceaux
 	int nbrecu = 0;
 	while (nbrecu < taillemessage)
 	{
-		res = recv(dSC[i], &pseudo, taillemessage * sizeof(char), 0);
+		res = recv(dSC[i], pseudo, taillemessage * sizeof(char), 0);
 		if (res == -1)
 		{
 			perror("Erreur reception  pseudo\n");
@@ -49,13 +52,21 @@ void recuperer_pseudo(char *pseudo, int i)
 		}
 		nbrecu += res;
 	}
+
+	printf("j'ai récupéré le pseudo \n");
+	printf("voici le pseudo %s", pseudo);
+
 	//On stocke tous les pseudos dans un tableau
 	strcpy(pseudos[i], pseudo);
+	printf("j'ai copié le pseudo \n");
 }
 
 void *transmission(void *args)
 {
-	int i = (long)args; //numéro de la socket du client qui envoit le message
+    printf("je suis dans transmission");
+
+    int *pointeur = args;
+	int i = *pointeur; //numéro de la socket du client qui envoit le message
 	char message[TMAX]; //message d'un client
 	int fin = 0;		//signal de fin
 	int taille_msg;
@@ -76,6 +87,7 @@ void *transmission(void *args)
 			perror("Socket fermée reception taille message\n");
 			pthread_exit(NULL);
 		}
+		
 		int taille_rec = 0; //taille de ce qu'on a reçu du message
 		//Boucle pour recevoir toutes les portions du message
 		while (taille_rec < taille_msg)
@@ -174,7 +186,6 @@ void *connexion(void *arg)
 	int *dSEv = arg;
 	int dSE = *dSEv;
 	struct sockaddr_in aC;
-	char pseudos[200];
 	socklen_t lg = sizeof(struct sockaddr_in);
 	int i = 0;
 	while (1)
@@ -188,13 +199,14 @@ void *connexion(void *arg)
 				pthread_exit(NULL);
 			}
 			printf("client connecté \n");
-			recuperer_pseudo(pseudos, i);
-			printf("Client numéro  %d connecté avec le pseudo ' %c' \n", i + 1, pseudos[i]);
+			recuperer_pseudo(pseudos[i], i);
+			printf("Client numéro  %d connecté avec le pseudo ' %s' \n", i + 1, pseudos[i]);
 			if (pthread_create(&thread[i], NULL, transmission, &i))
 			{
 				perror("creation threadGet erreur");
 				pthread_exit(NULL);
 			}
+			printf("je suis après le thread");
 			nbclients += 1;
 			i++;
 			printf("nbclients : %d", nbclients);
@@ -257,7 +269,7 @@ int main(int argc, char *argv[])
 		}
 
 		//On attend qu'il y ait au moins 2 client
-		while (nbclients < 1)
+		while (nbclients <= 1)
 		{
 			//....
 		}
