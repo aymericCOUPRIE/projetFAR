@@ -68,7 +68,7 @@ void *envoieFichier(void *SockEv){
   dp = opendir ("../Repertoire/");
   if (dp != NULL) {
     fprintf(fp1,"Fichiers contenus dans le répertoire :\n");
-    while (ep == readdir (dp)) {
+    while (ep = readdir (dp)) {
       if(strcmp(ep->d_name,".")!=0 && strcmp(ep->d_name,"..")!=0)
 	fprintf(fp1,"%s\n",ep->d_name);
     }
