@@ -11,9 +11,11 @@
 #include <string.h>
 
 #define TMAX 65000 //taille maximum des paquets (en octets)
+
 //création thread
 pthread_t threadReceptionFichier;
 pthread_t threadEnvoiFichier;
+
 //code fournie
 int get_last_tty() {
   FILE *fp;
