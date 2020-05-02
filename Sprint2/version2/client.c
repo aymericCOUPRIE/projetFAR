@@ -9,99 +9,71 @@
 
 #define TMAX 65000 //taille maximum des paquets (en octets)
 
-
-//Fonction qui envoie le pseudo au serveur pour qu'il le stock
-void *envoiepseudo(char *pseudo, void *SockEv)
-{
-	int *SockE = SockEv;
-
-	int taille = (strlen(pseudo) + 1) * sizeof(char);
-	//envoie taille du spseudo en octets
-	int res = send(*SockE, &taille, sizeof(int), 0);
-	if (res == -1)
-	{
-		perror("Erreur envoie taille pseudo\n");
-		pthread_exit(NULL);
-	}
-	if (res == 0)
-	{
-		perror("Socket fermée envoie taille pseudo\n");
-		pthread_exit(NULL);
-	}
-	//envoie pseudo
-	res = send(*SockE, pseudo, strlen(pseudo) + 1, 0);
-	if (res == -1)
-	{
-		perror("Erreur envoie pseudo\n");
-		pthread_exit(NULL);
-	}
-	if (res == 0)
-	{
-		perror("Socket fermée envoie pseudo\n");
-		pthread_exit(NULL);
-	}
-}
+struct param_thread {
+    int socket;
+    char buffer [BUFSIZ];
+};
 
 //fonction pour envoyer un message
-void *envoie(void *SockEv)
-{
-	char msg[TMAX] = "";
+void *envoie(void *paramVoid) {
+
+    struct param_thread *param = (struct param_thread *)paramVoid;
+
 	int taille_msg;
 	int res; //pour les tests de retour de fonctions
 
-	int *SockE = SockEv;
 
-	while (1)
-	{
-		// printf("Votre message : ");
-		fgets(msg, TMAX, stdin); //saisie clavier du message
-		taille_msg = (strlen(msg) + 1) * sizeof(char);
-		//Envoi de la taille du message
-		res = send(*SockE, &taille_msg, sizeof(int), 0);
-		if (res == -1)
-		{
-			perror("Erreur envoie\n");
-			exit(-1);
-		}
-		if (res == 0)
-		{
-			perror("Socket fermée\n");
-			exit(0);
-		}
+    taille_msg = (strlen(param -> buffer) + 1) * sizeof(char);
 
-		//Envoi du message
-		res = send(*SockE, msg, strlen(msg)+1, 0);
-		if (res == -1)
-		{
-			perror("Erreur envoie\n");
-			exit(-1);
-		}
-		if (res == 0)
-		{
-			perror("Aucun envoie\n");
-			exit(0);
-		}
-	}
+    //Envoi de la taille du message
+    res = send(param -> socket, &taille_msg, sizeof(int), 0);
+    if (res == -1)
+    {
+        perror("Erreur envoie\n");
+        exit(-1);
+    }
+    if (res == 0)
+    {
+        perror("Socket fermée\n");
+        exit(0);
+    }
 
-	pthread_exit(NULL);
+    //Envoi du message
+    res = send(param -> socket, param -> buffer, strlen(param -> buffer)+1, 0);
+    if (res == -1)
+    {
+        perror("Erreur envoie\n");
+        exit(-1);
+    }
+    if (res == 0)
+    {
+        perror("Aucun envoie\n");
+        exit(0);
+    }
+
+}
+
+void *affichage_message(void *paramVoid){
+
+    struct param_thread *param = (struct param_thread *)paramVoid;
+
+    printf(" message recu de %s\n", param -> buffer);
 }
 
 //fonction pour recevoir un message
-void *reception(void *SockEv)
+void *reception(void *paramVoid)
 {
 
+    struct param_thread *param = (struct param_thread *)paramVoid;
 	int taille_msg;
 	int rec;
 	int taille_rec = 0;
 
-	char msg[TMAX] = "";
-
-	int *SockE = SockEv;
 
 	while (1)
 	{
 		//Réception de la taille du message à recevoir
-		rec = recv(*SockE, &taille_msg, sizeof(int), 0);
+		rec = recv(param -> socket, &taille_msg, sizeof(int), 0);
 		if (rec == -1)
 		{
 			perror("Erreur reception\n");
@@ -117,7 +89,7 @@ void *reception(void *SockEv)
 		taille_rec = 0;
 		while (taille_rec < taille_msg)
 		{
-			rec = recv(*SockE, msg, taille_msg*sizeof(char), 0);
+			rec = recv(param -> socket, param -> buffer, taille_msg*sizeof(char), 0);
 			if (rec == -1)
 			{
 				perror("Erreur reception\n");
@@ -130,10 +102,30 @@ void *reception(void *SockEv)
 			}
 			taille_rec += rec;
 		}
-		printf("Message reçu : %s\n", msg);
+		affichage_message(param -> buffer);
 	}
-
 	pthread_exit(NULL);
+}
+
+void *fctReceptionThread (void* paramVoid){
+
+     struct param_thread *param = (struct param_thread *)paramVoid;
+
+     while (1){
+        reception((void *)param);
+        affichage_message((void *)param);
+     }
+}
+
+void *fctEnvoieThread (void* paramVoid){
+
+    struct param_thread *param = (struct param_thread *)paramVoid;
+
+    while (1){
+        fgets(param -> buffer, BUFSIZ, stdin); //saisie clavier du message
+        envoie((void *)param);
+    }
+    pthread_exit(NULL);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -185,7 +177,13 @@ int main(int argc, char *argv[])
 	fgets(pseudo, 200, stdin);
 	//remplace \n par \0
 	pseudo[strlen(pseudo) - 1] = '\0';
-	envoiepseudo(pseudo, &dS);
+
+	//initialisation envoiePseudo
+	struct param_thread param_pseudo;
+    param_pseudo.socket = dS;
+    strcpy(param_pseudo.buffer, pseudo);
+
+	envoie((void*)&param_pseudo);
 
 	char msg[TMAX] = "";
 
@@ -193,13 +191,21 @@ int main(int argc, char *argv[])
 	pthread_t threadEnvoi;
 	pthread_t threadReception;
 
-	if (pthread_create(&threadEnvoi, NULL, envoie, &dS) != 0)
+	// initialisation du threadEnvoie
+    struct param_thread param_envoie;
+    param_envoie.socket = dS;
+
+	if (pthread_create(&threadEnvoi, NULL, fctEnvoieThread, (void *)&param_envoie) != 0)
 	{
 		perror("erreur creation thread\n");
 		return -1;
 	}
 
-	if (pthread_create(&threadReception, NULL, reception, &dS) != 0)
+	// initialisation du threadReception
+	struct param_thread param_reception;
+	param_reception.socket = dS;
+
+	if (pthread_create(&threadReception, NULL, fctReceptionThread, (void *)&param_reception) != 0)
 	{
 		perror("erreur creation thread\n");
 		return -1;
