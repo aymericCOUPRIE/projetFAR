@@ -16,6 +16,9 @@
 
 #define TMAX 65000 //taille maximum des paquets (en octets)
 
+char msg[TMAX];
+char fileNameReception[TMAX];
+
 //création des deux threads
 pthread_t threadEnvoi;
 pthread_t threadReception;
@@ -116,7 +119,7 @@ void *envoiepseudo(char *pseudo, void *SockEv)
 //fonction pour envoyer un message
 void *envoie(void *SockEv)
 {
-	char msg[TMAX] = "";
+	strcpy(msg, "");
 	int taille_msg;
 	int res; //pour les tests de retour de fonctions
 
@@ -165,7 +168,7 @@ void *reception(void *SockEv)
 	int rec;
 	int taille_rec = 0;
 
-	char msg[TMAX] = "";
+	strcpy(msg, "");
 
 	int *SockE = SockEv;
 
@@ -208,7 +211,6 @@ void *reception(void *SockEv)
 }
 
 // fonction envoie d'un fichier
-
 void *envoieFichier(void *SockEv){
 
     int *SockE = SockEv;
@@ -304,12 +306,92 @@ void *envoieFichier(void *SockEv){
 
         // sendfile() copie des données entre deux descripteurs de fichier. Offset est remplie avec la position de l'octet immédiatement après le dernier octet lu.
         while (((res = sendfile(*SockE, fps, &offset, BUFSIZ)) > 0) && remainData > 0){
+            remainData = remainData - res;
             printf("J'ai envoyé %d bytes, mon offset vaut %ld et il me reste à envoyer %d bytes \n", res, offset, remainData);
         }
     }
     close(fps);
     pthread_exit(NULL);
 }
+
+// fonction reception d'un fichier
+void *receptionfichier(void *SockEv){
+
+    int *SockE = SockEv;
+	strcpy(fileNameReception, "");
+	int taille_fichier;
+	int taille_nom;
+	char buffer[BUFSIZ];
+
+    // reception de la taille du nom du fichier
+	int res = recv(*SockE, &taille_nom, sizeof(int), 0);
+	if (res == -1){
+		perror("Erreur reception taille \n");
+		pthread_exit(NULL);
+	}
+	if (res == 0){
+		perror("Socket fermée reception nombre ligne\n");
+		pthread_exit(NULL);
+	}
+
+    // reception du nom du fichier
+	int taille_rec = 0;
+    while (taille_rec < taille_nom)
+    {
+        res = recv(*SockE, fileNameReception, taille_nom*sizeof(char), 0);
+        if (res == -1)
+        {
+            perror("Erreur reception\n");
+            exit(-1);
+        }
+        if (res == 0)
+        {
+            perror("Socket fermée\n");
+            exit(0);
+        }
+        taille_rec += res;
+    }
+
+	//création du fichier
+	char nomFichier[100];
+	strcpy(nomFichier,"../Telechargement/");
+	strcat(nomFichier,msg);
+
+	FILE* fichier = fopen(nomFichier,"a");
+
+	// reception de la taille du fichier
+	res = recv(*SockE, &taille_fichier, sizeof(int), 0);
+    if (res == -1){
+        perror("Erreur reception taille \n");
+        pthread_exit(NULL);
+    }
+    if (res == 0){
+        perror("Socket fermée reception nombre ligne\n");
+        pthread_exit(NULL);
+    }
+
+	int remainData = taille_fichier;
+
+    // reception du contenu du fichier
+    while (remainData > 0 && (res = recv(*SockE, buffer, BUFSIZ, 0)) > 0 ){
+        if (res == -1){
+            perror("Erreur reception mot fichier\n");
+            pthread_exit(NULL);
+        }
+        if (res == 0){
+            perror("Socket fermée reception mot fichier\n");
+            pthread_exit(NULL);
+        }
+        fprintf(fichier, "%s", buffer);
+        remainData = remainData - res;
+        printf("J'ai reçu %d bytes, il me reste à recevoir %d bytes \n", res, remainData);
+	}
+	printf("\n le Fichier reçu se trouve maintenant dans le dossier Telechargement :\n");
+	printf("%s\n", nomFichier);
+	fclose(fichier);
+	pthread_exit(NULL);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
