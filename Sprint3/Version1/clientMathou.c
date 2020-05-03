@@ -23,6 +23,8 @@ struct param_thread {
 //création des deux threads
 pthread_t threadEnvoi;
 pthread_t threadReception;
+pthread_t threadReceptionFichier;
+pthread_t threadEnvoiFichier;
 
 //Code fourni et compris
 
@@ -83,8 +85,6 @@ FILE* new_tty() {
     pthread_mutex_unlock(&the_mutex);
     pthread_mutex_destroy(&the_mutex);
 
-    //TODO : se demander quand est-ce que l'on ferme le terminal avec system(exit);
-
     return fp;
 }
 
@@ -103,42 +103,38 @@ void *reception(void *paramVoid) {
 	int rec;
 	int taille_rec = 0;
 
+    //Réception de la taille du message à recevoir
+    rec = recv(param -> socket, &taille_msg, sizeof(int), 0);
+    if (rec == -1)
+    {
+        perror("Erreur reception\n");
+        exit(-1);
+    }
+    else if (rec == 0)
+    {
+        perror("Aucun message recu\n");
+        exit(0);
+    }
 
-	while (1)
-	{
-		//Réception de la taille du message à recevoir
-		rec = recv(param -> socket, &taille_msg, sizeof(int), 0);
-		if (rec == -1)
-		{
-			perror("Erreur reception\n");
-			exit(-1);
-		}
-		else if (rec == 0)
-		{
-			perror("Aucun message recu\n");
-			exit(0);
-		}
+    //Boucle pour recevoir toutes les portions du message
+    taille_rec = 0;
+    while (taille_rec < taille_msg)
+    {
+        rec = recv(param -> socket, param -> buffer, taille_msg*sizeof(char), 0);
+        if (rec == -1)
+        {
+            perror("Erreur reception\n");
+            exit(-1);
+        }
+        if (rec == 0)
+        {
+            perror("Socket fermée\n");
+            exit(0);
+        }
+        taille_rec += rec;
 
-		//Boucle pour recevoir toutes les portions du message
-		taille_rec = 0;
-		while (taille_rec < taille_msg)
-		{
-			rec = recv(param -> socket, param -> buffer, taille_msg*sizeof(char), 0);
-			if (rec == -1)
-			{
-				perror("Erreur reception\n");
-				exit(-1);
-			}
-			if (rec == 0)
-			{
-				perror("Socket fermée\n");
-				exit(0);
-			}
-			taille_rec += rec;
-		}
-		affichage_message(param -> buffer);
 	}
-	pthread_exit(NULL);
+
 }
 
 //fonction reception d'un fichier
@@ -197,6 +193,30 @@ void *receptionfichier(void *paramVoid){
 	pthread_exit(NULL);
 }
 
+//fonction qui vérifie si le message recu = file et active un nouveau thread
+void *recu_Msg_File (void * paramVoid){
+
+    struct param_thread *param = (struct param_thread *)paramVoid;
+
+    char *strToken = strtok(param -> buffer, ": ");
+    // on enleve le pseudo de la chaine à comparer
+    strToken = strtok(NULL, ": ");
+
+    if(strcmp(strToken,"file\n") ==0){
+
+        if( pthread_create(&threadReceptionFichier, NULL, receptionfichier, NULL ) ){
+            perror("creation threadFileSnd erreur");
+            pthread_exit(NULL);
+        }
+
+        if(pthread_join(threadReceptionFichier, NULL)){ //pthread_join attend la fermeture
+            perror("Erreur attente threadFileSnd");
+            pthread_exit(NULL);
+        }
+
+    }
+}
+
 // fonction appelé par le threadReception
 void *fctReceptionThread (void* paramVoid){
 
@@ -205,7 +225,10 @@ void *fctReceptionThread (void* paramVoid){
      while (1){
         reception((void *)param);
         affichage_message((void *)param);
+        recu_Msg_File((void *)param);
      }
+
+     pthread_exit(NULL);
 }
 
 //fonction pour envoyer un message
@@ -267,10 +290,11 @@ void *affichage_repertoire (){
     else {
         perror ("Erreur ouverture du répertoire");
     }
+
 }
 
 // fonction envoie d'un fichier
-void *envoieFichier(void *paramVoid){
+void *envoiFichier(void *paramVoid){
 
     struct param_thread *param = (struct param_thread *)paramVoid;
 
@@ -278,19 +302,31 @@ void *envoieFichier(void *paramVoid){
 	affichage_repertoire();
 
     //choix du fichier à envoyer
-    printf("Indiquer le nom du fichier choisi: ");
-    char fileName[1023];
-    char filePath[1023];
+    printf("Indiquer le nom du fichier choisi: \n");
+
+    char fileName[1024] = "";
+    char filePath[1024] = "";
 
     fgets(fileName,sizeof(fileName),stdin);
+    //system("exit"); sleep(1);
     fileName[strlen(fileName)-1]='\0';
 
     //ouverture du fichier
     strcpy(filePath, "../Repertoire/");
     strcat(filePath, fileName);
 
+    printf("le path vaut : %s \n", filePath);
+    printf("filename vaut : %s \n", fileName);
+
+    printf("j'ouvre le fichier \n");
+
     //j'utilise open car cela me permet d'utiliser des fonctions comme sendFile qui sont plus efficaces.
     int fps = open(filePath, O_RDONLY);
+
+    printf("la valeur de fps vaut %d", fps);
+    printf("point 2");
+
+    sleep(3);
 
     if (fps == -1){
 
@@ -300,9 +336,13 @@ void *envoieFichier(void *paramVoid){
 
         int res = 0;
 
+        printf("le nom du fichier vaut %s", fileName);
+
         //initialisation et envoie du nom du fichier
         strcpy(param -> buffer, fileName);
         envoie((void *)param);
+
+        printf("point 3");
 
         //calcul nb de caracteres  fichier
         /* possibilité de soucis sur et la structure stat sizeFileByte */
@@ -345,6 +385,26 @@ void *envoieFichier(void *paramVoid){
     pthread_exit(NULL);
 }
 
+//fonction qui vérifie si le message envoyé = file et active un nouveau thread
+void *envoi_Msg_file (void* paramVoid){
+
+    struct param_thread *param = (struct param_thread *)paramVoid;
+
+    if(strcmp(param -> buffer,"file\n") ==0){
+
+        if( pthread_create(&threadEnvoiFichier, NULL, envoiFichier, NULL ) ){
+            perror("creation threadFileSnd erreur");
+            pthread_exit(NULL);
+        }
+
+        if(pthread_join(threadEnvoiFichier, NULL)){ //pthread_join attend la fermeture
+            perror("Erreur attente threadFileSnd");
+            pthread_exit(NULL);
+        }
+
+    }
+}
+
 // fonction appelé par le threadEnvoi
 void *fctEnvoiThread (void* paramVoid){
 
@@ -353,6 +413,7 @@ void *fctEnvoiThread (void* paramVoid){
     while (1){
         fgets(param -> buffer, BUFSIZ, stdin); //saisie clavier du message
         envoie((void *)param);
+        envoi_Msg_file((void *)param);
     }
     pthread_exit(NULL);
 }

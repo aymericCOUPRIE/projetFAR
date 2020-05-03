@@ -106,6 +106,8 @@ void * transmission (void * args){
 			fin = 1;
 		}
 
+		printf("le serveur a reçu %s", msg);
+
 		//on met le pseudo au debut du message avant de le transmettre
 		char newMsg[TMAX];
 		strcpy(newMsg, pseudos[i]);
@@ -119,10 +121,13 @@ void * transmission (void * args){
                 if (envoie(tabdSC[j], newMsg) != 1){
 	                perror("err : env dans trans");
 	                pthread_exit(NULL);
+	                printf("message envoyé à client %d \n", j);
                 }
             }
             j = j+1;
         }
+
+        printf("le serveur a envoyé %s", newMsg);
     }
     printf("je sors de la boucle transmission serveur \n");
     pthread_exit(NULL);
