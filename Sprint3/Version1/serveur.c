@@ -145,8 +145,7 @@ void* transmissionFichier(void* arg) {
     int *recupVoid = arg;
     int i = *recupVoid; //Expéditeur fichier
     char msg[TMAX] = "";
-    
-
+    int tailleFichier = 0;
 
     while (1) {
 
@@ -155,6 +154,8 @@ void* transmissionFichier(void* arg) {
             perror("err : recep dans trans");
             pthread_exit(NULL);
         }
+
+        printf("le titre du fichier est : %s \n", msg);
         
         int j = 0; 
         while (j < nbrClient){
@@ -172,58 +173,68 @@ void* transmissionFichier(void* arg) {
 
 
         //recevoir la taille fichier
-        if (reception(tabdSCFichier[i], msg) != 1){
-            perror("err : recep dans trans");
-            pthread_exit(NULL);
+        int rec = recv(tabdSCFichier[i], &tailleFichier, sizeof(int), 0);
+        if (rec == -1){
+            perror("Erreur 1ere reception\n");
+            exit(0);
         }
-        int tailleFichier = atoi(msg);
-     
-       
+        if (rec == 0){
+            perror("Socket fermée\n");
+            exit(0);
+        }
+        printf("la taille du fichier vaut %d \n", tailleFichier);
+
         j = 0; 
         while (j < nbrClient){
             if (j != i) {
                 //on envoie à tout le monde la taille du fichier
-                 if (envoie(tabdSCFichier[j], msg) != 1){
-	                perror("erreur envoie taille fichier");
-	                pthread_exit(NULL);
+                int mes = send(tabdSCFichier[j], &tailleFichier, sizeof(int), 0);
+                if (mes == -1){
+                    perror("Erreur envoie\n");
+                    exit(0);
                 }
-                 printf("message envoyé à client %d \n", j);
+                if (mes==0){
+                    perror("Socket fermée\n");
+                    exit(0);
+                }
+                printf("message envoyé à client %d \n", j);
             }
             j++; 
         }
-        printf("envoi taille en cours\n");
+        printf("envoi taille en fini\n");
       
         j=0;
-        int tailleEnvoye = 0;
-          //recevoir fichier
-            if (reception(tabdSCFichier[i], msg) != 1){
-            perror("err : recep dans trans");
-            pthread_exit(NULL);
-        }
-        while(tailleEnvoye < tailleFichier){
-        
-            while (j < nbrClient){
-                if (j != i) {
+        int remainData = tailleFichier;
+        char buffer[BUFSIZ];
 
-                    
-                    //Envoi du fichier à tout le monde
-                    if (envoie(tabdSCFichier[j], msg) != 1){
-	                perror("erreur envoie  fichier");
-	                pthread_exit(NULL);    
-                    }
-                  printf("fichier envoyé à client %d \n", j);
-
-                    
-                }
-                
-                j++;
-            }
-            
+        while (remainData > 0 && (res = recv(tabdSCFichier[i], buffer, BUFSIZ, 0)) > 0 ){
             j = 0;
-            memset(msg,0,sizeof(msg));
-            tailleEnvoye +=res;
+            if (res == -1){
+                perror("Erreur reception mot fichier\n");
+                pthread_exit(NULL);
+            }
+            if (res == 0){
+                perror("Socket fermée reception mot fichier\n");
+                pthread_exit(NULL);
+            }
+            while(j < nbrClient){
+                if (i != j){
+                    int mes = send(tabdSCFichier[j], buffer, BUFSIZ, 0);
+                    if (mes == -1){
+                        perror("Erreur envoie\n");
+                        exit(0);
+                    }
+                    if (mes == 0){
+                        perror("Aucun envoie\n");
+                        exit(0);
+                    }
+                }
+                j = j+1;
+            }
+            remainData = remainData - res;
+            printf("J'ai reçu %d bytes, il me reste à recevoir %d bytes \n", res, remainData);
         }
-        
+        printf("fin de l'envoi du fichier \n");
     }
     pthread_exit(0);
 
@@ -253,6 +264,15 @@ void * connexion (void * args){
             printf ("j'ai accepté un nouveau client \n");
 
             recuperer_pseudo (pseudos[i], i);
+
+            printf ("j'ai récupéré le pseudo %s", pseudos[i]);
+
+            tabdSCFichier[i] = accept(dS, (struct sockaddr*) &aC,&lg);
+            if(tabdSCFichier[i] == -1){
+                perror("Erreur accept client \n");
+                pthread_exit(NULL);
+            }
+
             printf("client numéro %d connecté avec le pseudo %s \n", i+1, pseudos[i]);
 
             j = i;
@@ -346,7 +366,9 @@ int main(int argc, char* argv[]){
     //on ferme les threads et les sockets des clients
     for (long i = 0; i < nbrClient; i++) {
         pthread_cancel(thread[i]); //ferme le thread du client i
-        close(tabdSC[i]);		    //ferme la socket du client i
+        pthread_cancel(thread2[i]);
+        close(tabdSC[i]);//ferme la socket du client i
+        close(tabdSCFichier[i]);
     }
 
     pthread_cancel(threadConnexion); //on ferme la socket de connexion

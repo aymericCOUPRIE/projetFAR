@@ -141,23 +141,22 @@ void *reception(void *paramVoid) {
 }
 
 //fonction reception d'un fichier
-void *receptionfichier(void *paramVoid){
-
-    struct param_thread *param = (struct param_thread *)paramVoid;
+void *receptionfichier(void *null){
 
 	int taille_fichier;
 	int taille_nom;
 	char buffer[BUFSIZ];
 
-	printf("la socket vaut %d", param -> socket);
-	printf("le buffer vaut %s", param -> buffer);
+	struct param_thread param;
+	param.socket = dSFile;
 
-    /*reception((void *)param);
+    reception((void *)&param);
+    printf("le nom du fichier est %s \n", param.buffer);
 
 	//création du fichier
 	char nomFichier[100];
 	strcpy(nomFichier,"../Telechargement/");
-	strcat(nomFichier,param -> buffer);
+	strcat(nomFichier,param.buffer);
 
 	FILE* fichier = fopen(nomFichier,"a");
 
@@ -166,7 +165,7 @@ void *receptionfichier(void *paramVoid){
     }
 
 	// reception de la taille du fichier
-	int res = recv(param -> socket, &taille_fichier, sizeof(int), 0);
+	int res = recv(param.socket, &taille_fichier, sizeof(int), 0);
     if (res == -1){
         perror("Erreur reception taille \n");
         pthread_exit(NULL);
@@ -179,7 +178,7 @@ void *receptionfichier(void *paramVoid){
 	int remainData = taille_fichier;
 
     // reception du contenu du fichier
-    while (remainData > 0 && (res = recv(param -> socket, buffer, BUFSIZ, 0)) > 0 ){
+    while (remainData > 0 && (res = recv(param.socket, buffer, BUFSIZ, 0)) > 0 ){
         if (res == -1){
             perror("Erreur reception mot fichier\n");
             pthread_exit(NULL);
@@ -196,7 +195,7 @@ void *receptionfichier(void *paramVoid){
 	printf("\n le Fichier reçu se trouve maintenant dans le dossier Telechargement :\n");
 	printf("%s\n", nomFichier);
 	fclose(fichier);
-	pthread_exit(NULL);*/
+	pthread_exit(NULL);
 }
 
 //fonction qui vérifie si le message recu = file et active un nouveau thread
@@ -220,7 +219,7 @@ void *recu_Msg_File (void * paramVoid){
 
         sleep(3);
 
-        /*if( pthread_create(&threadReceptionFichier, NULL, receptionfichier, NULL ) ){
+        if( pthread_create(&threadReceptionFichier, NULL, receptionfichier, NULL ) ){
             perror("creation threadFileSnd erreur");
             pthread_exit(NULL);
         }
@@ -228,7 +227,7 @@ void *recu_Msg_File (void * paramVoid){
         if(pthread_join(threadReceptionFichier, NULL)){ //pthread_join attend la fermeture
             perror("Erreur attente threadFileSnd");
             pthread_exit(NULL);
-        }*/
+        }
 
     }
 }
