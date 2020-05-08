@@ -312,8 +312,6 @@ void *affichage_repertoire (){
 // fonction envoie d'un fichier
 void *envoiFichier(void *paramVoid){
 
-    struct param_thread *param = (struct param_thread *)paramVoid;
-
     //TODO : si erreur remettre l'affichage ici
 	affichage_repertoire();
 
@@ -357,8 +355,10 @@ void *envoiFichier(void *paramVoid){
         // TODO : essayer de créer une nouvelle structure
         // TODO : changer la taille de filepath and filename
         //initialisation et envoie du nom du fichier
-        strcpy(param -> buffer, fileName);
-        envoie((void *)param);
+        struct param_thread param;
+        param.socket = dSFile;
+        strcpy(param.buffer, fileName);
+        envoie((void *)&param);
 
         printf("point 3");
 
@@ -371,7 +371,7 @@ void *envoiFichier(void *paramVoid){
         int sizeFileByte = file_stat.st_size;
 
         //envoie de la taille du fichier
-        res = send(param -> socket, &sizeFileByte, sizeof(int), 0);
+        res = send(param.socket, &sizeFileByte, sizeof(int), 0);
         if (res == -1){
             perror("Erreur envoie nb caracteres\n");
             pthread_exit(NULL);
@@ -386,7 +386,7 @@ void *envoiFichier(void *paramVoid){
         int remainData = sizeFileByte;
 
         // sendfile() copie des données entre deux descripteurs de fichier. Offset est remplie avec la position de l'octet immédiatement après le dernier octet lu.
-        while (((res = sendfile(param -> socket, fps, &offset, BUFSIZ)) > 0) && remainData > 0){
+        while (((res = sendfile(param.socket, fps, &offset, BUFSIZ)) > 0) && remainData > 0){
             if (res == -1){
                 perror("Erreur envoie du contenu du fichier\n");
                 pthread_exit(NULL);
