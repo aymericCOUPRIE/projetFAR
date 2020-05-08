@@ -20,6 +20,9 @@ struct param_thread {
     char buffer [BUFSIZ];
 };
 
+int dSFile;
+int dSMessage;
+
 //création des deux threads
 pthread_t threadEnvoi;
 pthread_t threadReception;
@@ -146,7 +149,10 @@ void *receptionfichier(void *paramVoid){
 	int taille_nom;
 	char buffer[BUFSIZ];
 
-    reception((void *)param);
+	printf("la socket vaut %d", param -> socket);
+	printf("le buffer vaut %s", param -> buffer);
+
+    /*reception((void *)param);
 
 	//création du fichier
 	char nomFichier[100];
@@ -190,7 +196,7 @@ void *receptionfichier(void *paramVoid){
 	printf("\n le Fichier reçu se trouve maintenant dans le dossier Telechargement :\n");
 	printf("%s\n", nomFichier);
 	fclose(fichier);
-	pthread_exit(NULL);
+	pthread_exit(NULL);*/
 }
 
 //fonction qui vérifie si le message recu = file et active un nouveau thread
@@ -198,13 +204,23 @@ void *recu_Msg_File (void * paramVoid){
 
     struct param_thread *param = (struct param_thread *)paramVoid;
 
-    char *strToken = strtok(param -> buffer, ": ");
+    char *strToken = "";
+    strToken = strtok(param -> buffer, ": ");
     // on enleve le pseudo de la chaine à comparer
     strToken = strtok(NULL, ": ");
 
-    if(strcmp(strToken,"file\n") ==0){
+    printf("%s", strToken);
 
-        if( pthread_create(&threadReceptionFichier, NULL, receptionfichier, NULL ) ){
+    int res = strcmp(strToken,"file\n");
+    printf("res vaut %d \n", res);
+
+    if( res == 0 ){
+
+        printf("je crée le threadReceptionFichier \n");
+
+        sleep(3);
+
+        /*if( pthread_create(&threadReceptionFichier, NULL, receptionfichier, NULL ) ){
             perror("creation threadFileSnd erreur");
             pthread_exit(NULL);
         }
@@ -212,7 +228,7 @@ void *recu_Msg_File (void * paramVoid){
         if(pthread_join(threadReceptionFichier, NULL)){ //pthread_join attend la fermeture
             perror("Erreur attente threadFileSnd");
             pthread_exit(NULL);
-        }
+        }*/
 
     }
 }
@@ -433,13 +449,20 @@ int main(int argc, char *argv[])
 	}
 
 	//definition de la socket
-	int dS;			   //Socket client
-	dS = socket(PF_INET, SOCK_STREAM, 0);
-	if (dS == -1)
+	//Socket client
+	dSFile = socket(PF_INET, SOCK_STREAM, 0);
+	if (dSFile == -1)
 	{
 		perror("Erreur socket\n");
 		return -1;
 	}
+
+	dSMessage = socket(PF_INET, SOCK_STREAM, 0);
+    if (dSMessage == -1)
+    {
+        perror("Erreur socket\n");
+        return -1;
+    }
 
 	//structure de la socket
 	struct sockaddr_in aS;
@@ -454,14 +477,15 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	//connexion au serveur
+	//connexion au serveur (socket Message)
 	socklen_t lgA = sizeof(aS);
-	res = connect(dS, (struct sockaddr *)&aS, lgA);
+	res = connect(dSMessage, (struct sockaddr *)&aS, lgA);
 	if (res == -1)
 	{
 		perror("Erreur connect\n");
 		return -1;
 	}
+	printf("dS Message ok \n");
 
 	//demande pseudo
 	char pseudo[200];
@@ -471,11 +495,20 @@ int main(int argc, char *argv[])
 	pseudo[strlen(pseudo) - 1] = '\0';
 
 	//initialisation envoiePseudo
-	struct param_thread param_pseudo;
-    param_pseudo.socket = dS;
+    struct param_thread param_pseudo;
+    param_pseudo.socket = dSMessage;
     strcpy(param_pseudo.buffer, pseudo);
 
-	envoie((void*)&param_pseudo);
+    envoie((void*)&param_pseudo);
+
+	printf("j'ai envoyé le pseudo \n");
+
+    res = connect(dSFile, (struct sockaddr *)&aS, lgA);
+    if (res == -1)
+    {
+        perror("Erreur connect\n");
+        return -1;
+    }
 
 	char msg[TMAX] = "";
 
@@ -485,7 +518,7 @@ int main(int argc, char *argv[])
 
 	// initialisation du threadEnvoie
     struct param_thread param_envoie;
-    param_envoie.socket = dS;
+    param_envoie.socket = dSMessage;
 
 	if (pthread_create(&threadEnvoi, NULL, fctEnvoiThread, (void *)&param_envoie) != 0)
 	{
@@ -495,7 +528,7 @@ int main(int argc, char *argv[])
 
 	// initialisation du threadReception
 	struct param_thread param_reception;
-	param_reception.socket = dS;
+	param_reception.socket = dSMessage;
 
 	if (pthread_create(&threadReception, NULL, fctReceptionThread, (void *)&param_reception) != 0)
 	{
@@ -508,6 +541,7 @@ int main(int argc, char *argv[])
 	pthread_join(threadReception, NULL);
 
 	//ferme la socket
-	close(dS);
+	close(dSMessage);
+	close(dSFile);
 	return 0;
 }

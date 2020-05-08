@@ -9,6 +9,7 @@
 #define TMAX 65000 //taille maximum des paquets (en octets)
 #define nbrClientMax 200
 
+int tabdSCFile[200]; // tableau de 200 sockets pour les fichiers
 int tabdSC[200] ; //tableau de 200 sockets
 char pseudos[200][10];
 int nbrClient;
@@ -148,6 +149,8 @@ void * connexion (void * args){
 
     while (nbrClient < nbrClientMax && fin == 0) {
 
+            printf("je suis dans la fonction connexion \n");
+
             tabdSC[i] = accept(dS, (struct sockaddr*) &aC,&lg);
             if(tabdSC[i] == -1){
                 perror("Erreur accept client \n");
@@ -157,6 +160,15 @@ void * connexion (void * args){
             printf ("j'ai accepté un nouveau client \n");
 
             recuperer_pseudo (pseudos[i], i);
+
+            printf ("j'ai récupéré le pseudo %s", pseudos[i]);
+
+            tabdSCFile[i] = accept(dS, (struct sockaddr*) &aC,&lg);
+            if(tabdSCFile[i] == -1){
+                perror("Erreur accept client \n");
+                pthread_exit(NULL);
+            }
+
             printf("client numéro %d connecté avec le pseudo %s \n", i+1, pseudos[i]);
 
             j = i;
