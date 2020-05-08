@@ -304,8 +304,8 @@ void *envoiFichier(void *paramVoid){
     //choix du fichier à envoyer
     printf("Indiquer le nom du fichier choisi: \n");
 
-    char fileName[1024] = "";
-    char filePath[1024] = "";
+    char fileName[40] = "";
+    char filePath[60] = "";
 
     fgets(fileName,sizeof(fileName),stdin);
     //system("exit"); sleep(1);
@@ -338,6 +338,8 @@ void *envoiFichier(void *paramVoid){
 
         printf("le nom du fichier vaut %s", fileName);
 
+        // TODO : essayer de créer une nouvelle structure
+        // TODO : changer la taille de filepath and filename
         //initialisation et envoie du nom du fichier
         strcpy(param -> buffer, fileName);
         envoie((void *)param);
