@@ -108,8 +108,6 @@ void * transmission (void * args){
 			fin = 1;
 		}
 
-       
-
 		printf("le serveur a reçu %s", msg);
 
 		//on met le pseudo au debut du message avant de le transmettre
@@ -127,11 +125,9 @@ void * transmission (void * args){
 	                pthread_exit(NULL);
 	                
                 }
-                printf("message envoyé à client %d \n", j);
             }
             j = j+1;
         }
-
         printf("le serveur a envoyé %s", newMsg);
 
     }
@@ -165,7 +161,6 @@ void* transmissionFichier(void* arg) {
 	                perror("erreur nom du fichier");
 	                pthread_exit(NULL);
                 }
-                printf("message envoyé à client %d \n", j);
             }
             j++; 
         }
@@ -182,7 +177,6 @@ void* transmissionFichier(void* arg) {
             perror("Socket fermée\n");
             exit(0);
         }
-        printf("la taille du fichier vaut %d \n", tailleFichier);
 
         j = 0; 
         while (j < nbrClient){
@@ -197,11 +191,10 @@ void* transmissionFichier(void* arg) {
                     perror("Socket fermée\n");
                     exit(0);
                 }
-                printf("message envoyé à client %d \n", j);
             }
             j++; 
         }
-        printf("envoi taille en fini\n");
+        printf("envoi taille fichier fini\n");
       
         j=0;
         int remainData = tailleFichier;
@@ -265,8 +258,6 @@ void * connexion (void * args){
 
             recuperer_pseudo (pseudos[i], i);
 
-            printf ("j'ai récupéré le pseudo %s", pseudos[i]);
-
             tabdSCFichier[i] = accept(dS, (struct sockaddr*) &aC,&lg);
             if(tabdSCFichier[i] == -1){
                 perror("Erreur accept client \n");
@@ -290,13 +281,9 @@ void * connexion (void * args){
                 printf("nombre client = %d \n", nbrClient);
             }
     }
-
-    printf("j'attend le thread 1 \n");
     pthread_join(thread[0], NULL);
 
-    printf("j'ai passé le join \n");
     pthread_exit (NULL);
-
 }
 
 int main(int argc, char* argv[]){

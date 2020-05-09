@@ -8,430 +8,415 @@
 #include <pthread.h>
 #include <limits.h>
 #include <dirent.h>
-#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/sendfile.h>
 
 #define TMAX 65000 //taille maximum des paquets (en octets)
 
-//création thread
+struct param_thread {
+    int socket;
+    char buffer [BUFSIZ];
+};
+
+int dSFile;
+int dSMessage;
+
+//création des deux threads
+pthread_t threadEnvoi;
+pthread_t threadReception;
 pthread_t threadReceptionFichier;
 pthread_t threadEnvoiFichier;
 
-//code fournie
-int get_last_tty() {
-  FILE *fp;
-  char path[1035];
-  fp = popen("/bin/ls /dev/pts", "r");
-  if (fp == NULL) {
-    printf("Impossible d'exécuter la commande\n" );
-    exit(1);
-  }
-  int i = INT_MIN;
-  while (fgets(path, sizeof(path)-1, fp) != NULL) {
-    if(strcmp(path,"ptmx")!=0){
-      int tty = atoi(path);
-      if(tty > i) i = tty;
-    }
-  }
+//Code fourni et compris
 
-  pclose(fp);
-  return i;
+/* tty est une commande Unix qui affiche sur la sortie standard le nom du fichier connecté sur l'entrée standard. */
+int get_last_tty() {
+    FILE *fp;
+    char path[1035];
+
+    /* engendre un processus en creant un tube (en lecture), exécutant un fork et en invoquant un shell
+    le premier argument contient un ligne de commande shell
+    fp est donc un flux d'entrée sortie, utilisation de l'entrée et sortie standard */
+    fp = popen("/bin/ls /dev/pts", "r");
+
+    if (fp == NULL) {
+        printf("Impossible d'exécuter la commande\n" );
+        exit(1);
+    }
+    int i = INT_MIN;
+
+    /* fgets sizeof(path)-1 caractères depuis fp et les stock dans path */
+    while (fgets(path, sizeof(path)-1, fp) != NULL) {
+
+        /* Le fichier /dev/ptmx est un fichier spécial caractère. Il sert à créer une  paire de pseudoterminaux maître et esclave.
+        Une fois que les deux pseudoterminaux sont ouverts, l'esclave  fournit  une  interface  au processus qui est identique au vrai terminal. */
+        if(strcmp(path,"ptmx")!=0){
+
+            /* Cette fonction permet de transformer une chaîne de caractères, représentant une valeur entière, en une valeur numérique de type int.*/
+            int tty = atoi(path);
+            if(tty > i) i = tty;
+        }
+    }
+    pclose(fp);
+    return i;
 }
 
 FILE* new_tty() {
-  pthread_mutex_t the_mutex;
-  pthread_mutex_init(&the_mutex,0);
-  pthread_mutex_lock(&the_mutex);
-  system("gnome-terminal"); sleep(1); //ouverture d'un terminal
-  char *tty_name = ttyname(STDIN_FILENO);
-  int ltty = get_last_tty();
-  char str[2];
-  sprintf(str,"%d",ltty);
-  int i;
-  for(i = strlen(tty_name)-1; i >= 0; i--) {
-    if(tty_name[i] == '/') break;
-  }
-  tty_name[i+1] = '\0';
-  strcat(tty_name,str);
-  FILE *fp = fopen(tty_name,"wb+");
-  pthread_mutex_unlock(&the_mutex);
-  pthread_mutex_destroy(&the_mutex);
-  return fp;
+    pthread_mutex_t the_mutex;
+    pthread_mutex_init(&the_mutex,0);
+    pthread_mutex_lock(&the_mutex);
+
+    /* commande qui permet d'ouvrir un nouveau terminal */
+    system("gnome-terminal"); sleep(1);
+
+    /* La fonction ttyname() renvoie un pointeur sur le chemin d'accèsdu périphérique terminal ouvert */
+    char *tty_name = ttyname(STDIN_FILENO);
+    int ltty = get_last_tty();
+    char str[2];
+    sprintf(str,"%d",ltty);
+    int i;
+    for(i = strlen(tty_name)-1; i >= 0; i--) {
+        if(tty_name[i] == '/') break;
+    }
+    tty_name[i+1] = '\0';
+    strcat(tty_name,str);
+
+    /* Cette fonction permet d'ouvrir un flux de caractère basé sur fichier */
+    FILE *fp = fopen(tty_name,"wb+");
+    pthread_mutex_unlock(&the_mutex);
+    pthread_mutex_destroy(&the_mutex);
+
+    return fp;
 }
 
-//fonction pour envoyer d'un fichier
-void *envoieFichier(void *SockEv){
-	int *SockE = SockEv;
-	FILE* fp1 = new_tty();
-  fprintf(fp1,"%s\n","Ce terminal sera utilisé uniquement pour l'affichage");
+void *affichage_message(void *paramVoid){
 
-  // Demander à l'utilisateur quel fichier afficher
-  DIR *dp;
-  struct dirent *ep;
-  dp = opendir ("../Repertoire/");
-  if (dp != NULL) {
-    fprintf(fp1,"Fichiers contenus dans le répertoire :\n");
-    while (ep = readdir (dp)) {
-      if(strcmp(ep->d_name,".")!=0 && strcmp(ep->d_name,"..")!=0)
-	fprintf(fp1,"%s\n",ep->d_name);
-    }
-    (void) closedir (dp);
-  }
-  else {
-    perror ("Erreur ouverture du répertoire");
-  }
-  printf("Indiquer le nom du fichier choisi: ");
-  char fileName[1023];
-	char filePath[1023];
+    struct param_thread *param = (struct param_thread *)paramVoid;
 
-  fgets(fileName,sizeof(fileName),stdin);
-  fileName[strlen(fileName)-1]='\0';
-
-
-	//envoie  contenu de fichier
-  char fileName2[1023];
-  strcpy(fileName2, "../Repertoire/");
-  strcat(fileName2, fileName);
-  strcpy(filePath, fileName2);
-
-  FILE *fps = fopen(filePath, "r");
-
-	//calcul nb de caracteres  fichier
-	int nb_char=0;
-	char c=fgetc(fps);
-	while (c != EOF) {
-		nb_char++;
-		c=fgetc(fps);
-	}
-
-	fclose(fps);
-	fps = fopen(filePath, "r");
-
-
-	//envoie du nbre de caracteres
-	int res = send(*SockE, &nb_char, sizeof(int), 0);
-	if (res == -1){
-		perror("Erreur envoie nb caracteres\n");
-		pthread_exit(NULL);
-	}
-	if (res == 0){
-		perror("Socket fermée lors de l'envoie du nb caracteres\n");
-		pthread_exit(NULL);
-	}
-
-  if (fps == NULL){
-    printf("Ne peux pas ouvrir le fichier suivant : %s",fileName);
-  }
-  else {
-
-		//Envoie du nom de fichier
-		int taille = (strlen(fileName)+1)*sizeof(char);
-		res = send(*SockE, &taille, sizeof(int), 0); /* envoie du nbre d'octets du paquet contenant le message */
-		if (res == -1){
-			perror("Erreur envoie taille nom fichier\n");
-			pthread_exit(NULL);
-		}
-		if (res == 0){
-			perror("Socket fermée envoie taille nom fichier\n");
-			pthread_exit(NULL);
-		}
-		//on envoit le nom du fichier
-		res = send(*SockE, fileName, taille, 0); 
-		if (res == -1){
-			perror("Erreur envoie nom fichier \n");
-			pthread_exit(NULL);
-		}
-		if (res == 0){
-			perror("Socket fermée envoie nom fichier \n");
-			pthread_exit(NULL);
-		}
-
-    char str[1000];
-
-    // Lire et afficher le contenu du fichier
-		char c=fgetc(fps);
-    while (c != EOF) {
-			taille = 1;
-			/* envoie du nbre d'octets du paquet contenant le message */
-			res = send(*SockE, &taille, sizeof(int), 0); 
-			if (res == -1){
-				perror("Erreur envoie taille\n");
-				pthread_exit(NULL);
-			}
-			if (res == 0){
-				perror("Socket fermée envoie taille\n");
-				pthread_exit(NULL);
-			}
-			/* envoie du message*/
-			res = send(*SockE, &c , taille, 0); 
-			if (res == -1){
-				perror("Erreur envoie message\n");
-				pthread_exit(NULL);
-			}
-			if (res == 0){
-				perror("Socket fermée envoie message\n");
-				pthread_exit(NULL);
-			}
-			c=fgetc(fps);
-    }
-  }
-  fclose(fps);
-	pthread_exit(NULL);
+    printf("message recu de %s", param -> buffer);
 }
 
+//fonction pour recevoir un message
+void *reception(void *paramVoid) {
 
+    struct param_thread *param = (struct param_thread *)paramVoid;
+	int taille_msg;
+	int rec;
+	int taille_rec = 0;
 
-//fonction pour recevoir un fichier
-void *recoieFichier(void *SockEv){
-	int *SockE = SockEv;
-	char msg[TMAX];//texte contenu dans le fichier que le client va envoyer
-	int nb_octets;
-	int nb_char;
+    //Réception de la taille du message à recevoir
+    rec = recv(param -> socket, &taille_msg, sizeof(int), 0);
+    if (rec == -1)
+    {
+        perror("Erreur reception\n");
+        exit(-1);
+    }
+    else if (rec == 0)
+    {
+        perror("Aucun message recu\n");
+        exit(0);
+    }
 
-	//reception du nb de lignes
-	int res = recv(*SockE, &nb_char, sizeof(int), 0); 
-	if (res == -1){
-		perror("Erreur reception nombre ligne \n");
-		pthread_exit(NULL);
-	}
-	if (res == 0){
-		perror("Socket fermée reception nombre ligne\n");
-		pthread_exit(NULL);
+    //Boucle pour recevoir toutes les portions du message
+    taille_rec = 0;
+    while (taille_rec < taille_msg)
+    {
+        rec = recv(param -> socket, param -> buffer, taille_msg*sizeof(char), 0);
+        if (rec == -1)
+        {
+            perror("Erreur reception\n");
+            exit(-1);
+        }
+        if (rec == 0)
+        {
+            perror("Socket fermée\n");
+            exit(0);
+        }
+        taille_rec += rec;
+
 	}
 
-	//reception du nom de fichier
-	res = recv(*SockE, &nb_octets, sizeof(int), 0); /*nbre d'octets du paquet contenant le mot recu*/
-	if (res == -1){
-		perror("Erreur reception taille\n");
-		pthread_exit(NULL);
-	}
-	if (res == 0){
-		//perror("Socket fermée reception taille\n");
-		pthread_exit(NULL);
-	}
-	int nb_recu = 0;//nbre d'octets recus
+}
 
-	while(nb_recu<nb_octets){
-		res = recv(*SockE, msg, nb_octets*sizeof(char), 0); 
-		if (res == -1){
-			perror("Erreur reception message fichier\n");
-			pthread_exit(NULL);
-		}
-		if (res == 0){
-			perror("Socket fermée reception message\n");
-			pthread_exit(NULL);
-		}
-		nb_recu+=res;
-	}
+//fonction reception d'un fichier
+void *receptionfichier(void *null){
+
+	int taille_fichier;
+	int taille_nom;
+	char buffer[BUFSIZ];
+
+	struct param_thread param;
+	param.socket = dSFile;
+
+    reception((void *)&param);
+    printf("le nom du fichier est %s \n", param.buffer);
 
 	//création du fichier
 	char nomFichier[100];
 	strcpy(nomFichier,"../Telechargement/");
-	strcat(nomFichier,msg);
+	strcat(nomFichier,param.buffer);
 
 	FILE* fichier = fopen(nomFichier,"a");
 
-	int nb_char_recue=0;
-	char c;
+    if (fichier == NULL) {
+        perror("failed to open file");
+    }
 
+	// reception de la taille du fichier
+	int res = recv(param.socket, &taille_fichier, sizeof(int), 0);
+    if (res == -1){
+        perror("Erreur reception taille \n");
+        pthread_exit(NULL);
+    }
+    if (res == 0){
+        perror("Socket fermée reception nombre ligne\n");
+        pthread_exit(NULL);
+    }
 
-	while(nb_char_recue<nb_char){
-		//reception du contenu du fichier
-		res = recv(*SockE, &nb_octets, sizeof(int), 0); 
-		if (res == -1){
-			perror("Erreur reception taille\n");
-			pthread_exit(NULL);
-		}
-		if (res == 0){
-			//perror("Socket fermée reception taille\n");
-			pthread_exit(NULL);
-		}
-		nb_recu = 0;//nbre d'octets recus
+	int remainData = taille_fichier;
 
-		while(nb_recu<nb_octets){
-			res = recv(*SockE, &c, sizeof(char), 0); 
-			if (res == -1){
-				perror("Erreur reception mot fichier\n");
-				pthread_exit(NULL);
-			}
-			if (res == 0){
-				perror("Socket fermée reception mot fichier\n");
-				pthread_exit(NULL);
-			}
-			nb_recu+= res;
-		}
-
-		nb_char_recue++;
-		fprintf(fichier, "%c", c);
+    // reception du contenu du fichier
+    while (remainData > 0 && (res = recv(param.socket, buffer, BUFSIZ, 0)) > 0 ){
+        if (res == -1){
+            perror("Erreur reception mot fichier\n");
+            pthread_exit(NULL);
+        }
+        if (res == 0){
+            perror("Socket fermée reception mot fichier\n");
+            pthread_exit(NULL);
+        }
+        fprintf(fichier, "%s", buffer);
+        remainData = remainData - res;
+        printf("J'ai reçu %d bytes, il me reste à recevoir %d bytes \n", res, remainData);
 	}
+
 	printf("\n le Fichier reçu se trouve maintenant dans le dossier Telechargement :\n");
 	printf("%s\n", nomFichier);
 	fclose(fichier);
 	pthread_exit(NULL);
 }
 
-//Fonction qui envoie le pseudo au serveur pour qu'il le stock
-void *envoiepseudo(char *pseudo, void *SockEv)
-{
-	int *SockE = SockEv;
+//fonction qui vérifie si le message recu = file et active un nouveau thread
+void *recu_Msg_File (void * paramVoid){
 
-	int taille = (strlen(pseudo) + 1) * sizeof(char);
-	//envoie taille du spseudo en octets
-	int res = send(*SockE, &taille, sizeof(int), 0);
-	if (res == -1)
-	{
-		perror("Erreur envoie taille pseudo\n");
-		pthread_exit(NULL);
-	}
-	if (res == 0)
-	{
-		perror("Socket fermée envoie taille pseudo\n");
-		pthread_exit(NULL);
-	}
-	//envoie pseudo
-	res = send(*SockE, pseudo, strlen(pseudo) + 1, 0);
-	if (res == -1)
-	{
-		perror("Erreur envoie pseudo\n");
-		pthread_exit(NULL);
-	}
-	if (res == 0)
-	{
-		perror("Socket fermée envoie pseudo\n");
-		pthread_exit(NULL);
-	}
+    struct param_thread *param = (struct param_thread *)paramVoid;
+
+    char *strToken = "";
+    strToken = strtok(param -> buffer, ": ");
+    // on enleve le pseudo de la chaine à comparer
+    strToken = strtok(NULL, ": ");
+
+    int res = strcmp(strToken,"file\n");
+
+    if( res == 0 ){
+
+        if( pthread_create(&threadReceptionFichier, NULL, receptionfichier, NULL ) ){
+            perror("creation threadFileSnd erreur");
+            pthread_exit(NULL);
+        }
+
+        if(pthread_join(threadReceptionFichier, NULL)){ //pthread_join attend la fermeture
+            perror("Erreur attente threadFileSnd");
+            pthread_exit(NULL);
+        }
+
+    }
+}
+
+// fonction appelé par le threadReception
+void *fctReceptionThread (void* paramVoid){
+
+     struct param_thread *param = (struct param_thread *)paramVoid;
+
+     while (1){
+        reception((void *)param);
+        affichage_message((void *)param);
+        recu_Msg_File((void *)param);
+     }
+
+     pthread_exit(NULL);
 }
 
 //fonction pour envoyer un message
-void *envoie(void *SockEv)
-{
-	char msg[TMAX] = "";
+void *envoie(void *paramVoid) {
+
+    struct param_thread *param = (struct param_thread *)paramVoid;
+
 	int taille_msg;
 	int res; //pour les tests de retour de fonctions
 
-	int *SockE = SockEv;
 
-	while (1)
-	{
-		// printf("Votre message : ");
-		fgets(msg, TMAX, stdin); //saisie clavier du message
-		taille_msg = (strlen(msg) + 1) * sizeof(char);
-		//Envoi de la taille du message
-		res = send(*SockE, &taille_msg, sizeof(int), 0);
-		if (res == -1)
-		{
-			perror("Erreur envoie\n");
-			exit(-1);
-		}
-		if (res == 0)
-		{
-			perror("Socket fermée\n");
-			exit(0);
-		}
+    taille_msg = (strlen(param -> buffer) + 1) * sizeof(char);
 
-		//Envoi du message
-		res = send(*SockE, msg, strlen(msg)+1, 0);
-		if (res == -1)
-		{
-			perror("Erreur envoie\n");
-			exit(-1);
-		}
-		if (res == 0)
-		{
-			perror("Aucun envoie\n");
-			exit(0);
-		}
+    //Envoi de la taille du message
+    res = send(param -> socket, &taille_msg, sizeof(int), 0);
+    if (res == -1)
+    {
+        perror("Erreur envoie\n");
+        exit(-1);
+    }
+    if (res == 0)
+    {
+        perror("Socket fermée\n");
+        exit(0);
+    }
 
-		//on regarde si il veut envoyer un fichier
-		if(strcmp(msg,"file\n")==0){
-			if( pthread_create(&threadEnvoiFichier, NULL, envoieFichier, NULL ) ){
-				perror("creation threadFileSnd erreur");
-				pthread_exit(NULL);
-			}
+    //Envoi du message
+    res = send(param -> socket, param -> buffer, strlen(param -> buffer)+1, 0);
+    if (res == -1)
+    {
+        perror("Erreur envoie\n");
+        exit(-1);
+    }
+    if (res == 0)
+    {
+        perror("Aucun envoie\n");
+        exit(0);
+    }
 
-			if(pthread_join(threadEnvoiFichier, NULL)){ //pthread_join attend la fermeture
-				perror("Erreur fermeture threadFileSnd");
-				pthread_exit(NULL);
-			}
-		}
-
-
-	}
-
-	pthread_exit(NULL);
 }
 
-//fonction pour recevoir un message
-void *reception(void *SockEv)
-{
+//fonction qui affiche la liste des répertoire dans un nouveau terminal
+void *affichage_repertoire (){
+    FILE* fp1 = new_tty();
+    fprintf(fp1,"%s\n","Ce terminal sera utilisé uniquement pour l'affichage");
 
-	int taille_msg;
-	int rec;
-	int taille_rec = 0;
+    // Demander à l'utilisateur quel fichier afficher
+    DIR *dp;
+    struct dirent *ep;
+    dp = opendir ("../Repertoire/");
+    if (dp != NULL) {
+        fprintf(fp1,"Fichiers contenus dans le répertoire :\n");
+        while (ep = readdir (dp)) {
+            if(strcmp(ep->d_name,".")!=0 && strcmp(ep->d_name,"..")!=0)
+                fprintf(fp1,"%s\n",ep->d_name);
+        }
+        (void) closedir (dp);
+    }
+    else {
+        perror ("Erreur ouverture du répertoire");
+    }
 
-	char msg[TMAX] = "";
-
-	int *SockE = SockEv;
-
-	while (1)
-	{
-		//Réception de la taille du message à recevoir
-		rec = recv(*SockE, &taille_msg, sizeof(int), 0);
-		if (rec == -1)
-		{
-			perror("Erreur reception\n");
-			exit(-1);
-		}
-		else if (rec == 0)
-		{
-			perror("Aucun message recu\n");
-			exit(0);
-		}
-
-		//Boucle pour recevoir toutes les portions du message
-		taille_rec = 0;
-		while (taille_rec < taille_msg)
-		{
-			rec = recv(*SockE, msg, taille_msg*sizeof(char), 0);
-			if (rec == -1)
-			{
-				perror("Erreur reception\n");
-				exit(-1);
-			}
-			if (rec == 0)
-			{
-				perror("Socket fermée\n");
-				exit(0);
-			}
-			taille_rec += rec;
-		}
-	
-
-		//on regarde si le contenu du message est "file"
-		if(strcmp(msg,"file\n") !=0){
-		printf(" %s\n", msg);
-		}
-		else{
-			if( pthread_create(&threadReceptionFichier, NULL, recoieFichier, NULL ) ){
-				perror("creation threadFileSnd erreur");
-				pthread_exit(NULL);
-			}
-
-			if(pthread_join(threadReceptionFichier, NULL)){ //pthread_join attend la fermeture
-				perror("Erreur fermeture threadFileSnd");
-				pthread_exit(NULL);
-			}
-
-		}
-	}
-
-	pthread_exit(NULL);
 }
 
+// fonction envoie d'un fichier
+void *envoiFichier(void *paramVoid){
 
+    //TODO : si erreur remettre l'affichage ici
+	affichage_repertoire();
 
+    //choix du fichier à envoyer
+    printf("Indiquer le nom du fichier choisi: \n");
 
+    char fileName[40] = "";
+    char filePath[60] = "";
 
+    fgets(fileName,sizeof(fileName),stdin);
+    //system("exit"); sleep(1);
+    fileName[strlen(fileName)-1]='\0';
 
+    //ouverture du fichier
+    strcpy(filePath, "../Repertoire/");
+    strcat(filePath, fileName);
+
+    printf("j'ouvre le fichier \n");
+
+    //j'utilise open car cela me permet d'utiliser des fonctions comme sendFile qui sont plus efficaces.
+    int fps = open(filePath, O_RDONLY);
+
+    sleep(3);
+
+    if (fps == -1){
+
+        printf("Ne peux pas ouvrir le fichier suivant : %s",fileName);
+
+    } else {
+
+        int res = 0;
+
+        printf("le nom du fichier vaut %s", fileName);
+
+        //initialisation et envoie du nom du fichier
+        struct param_thread param;
+        param.socket = dSFile;
+        strcpy(param.buffer, fileName);
+        envoie((void *)&param);
+
+        //calcul nb de caracteres  fichier
+        /* possibilité de soucis sur et la structure stat sizeFileByte */
+        struct stat file_stat;
+        if (fstat(fps, &file_stat) < 0) {
+                perror("impossible d'avoir les stats du fichier");
+        }
+        int sizeFileByte = file_stat.st_size;
+
+        //envoie de la taille du fichier
+        res = send(param.socket, &sizeFileByte, sizeof(int), 0);
+        if (res == -1){
+            perror("Erreur envoie nb caracteres\n");
+            pthread_exit(NULL);
+        }
+        if (res == 0){
+            perror("Socket fermée lors de l'envoie du nb caracteres\n");
+            pthread_exit(NULL);
+        }
+
+        //envoie du contenu du fichier
+        long offset = 0;
+        int remainData = sizeFileByte;
+
+        // sendfile() copie des données entre deux descripteurs de fichier. Offset est remplie avec la position de l'octet immédiatement après le dernier octet lu.
+        while (((res = sendfile(param.socket, fps, &offset, BUFSIZ)) > 0) && remainData > 0){
+            if (res == -1){
+                perror("Erreur envoie du contenu du fichier\n");
+                pthread_exit(NULL);
+            }
+            if (res == 0){
+                perror("Socket fermée lors de l'envoie du contenu du fichier\n");
+                pthread_exit(NULL);
+            }
+            remainData = remainData - res;
+            printf("J'ai envoyé %d bytes, mon offset vaut %ld et il me reste à envoyer %d bytes \n", res, offset, remainData);
+        }
+    }
+    close(fps);
+    pthread_exit(NULL);
+}
+
+//fonction qui vérifie si le message envoyé = file et active un nouveau thread
+void *envoi_Msg_file (void* paramVoid){
+
+    struct param_thread *param = (struct param_thread *)paramVoid;
+
+    if(strcmp(param -> buffer,"file\n") ==0){
+
+        if( pthread_create(&threadEnvoiFichier, NULL, envoiFichier, NULL ) ){
+            perror("creation threadFileSnd erreur");
+            pthread_exit(NULL);
+        }
+
+        if(pthread_join(threadEnvoiFichier, NULL)){ //pthread_join attend la fermeture
+            perror("Erreur attente threadFileSnd");
+            pthread_exit(NULL);
+        }
+
+    }
+}
+
+// fonction appelé par le threadEnvoi
+void *fctEnvoiThread (void* paramVoid){
+
+    struct param_thread *param = (struct param_thread *)paramVoid;
+
+    while (1){
+        fgets(param -> buffer, BUFSIZ, stdin); //saisie clavier du message
+        envoie((void *)param);
+        envoi_Msg_file((void *)param);
+    }
+    pthread_exit(NULL);
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -446,13 +431,20 @@ int main(int argc, char *argv[])
 	}
 
 	//definition de la socket
-	int dS;			   //Socket client
-	dS = socket(PF_INET, SOCK_STREAM, 0);
-	if (dS == -1)
+	//Socket client
+	dSFile = socket(PF_INET, SOCK_STREAM, 0);
+	if (dSFile == -1)
 	{
 		perror("Erreur socket\n");
 		return -1;
 	}
+
+	dSMessage = socket(PF_INET, SOCK_STREAM, 0);
+    if (dSMessage == -1)
+    {
+        perror("Erreur socket\n");
+        return -1;
+    }
 
 	//structure de la socket
 	struct sockaddr_in aS;
@@ -467,14 +459,15 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	//connexion au serveur
+	//connexion au serveur (socket Message)
 	socklen_t lgA = sizeof(aS);
-	res = connect(dS, (struct sockaddr *)&aS, lgA);
+	res = connect(dSMessage, (struct sockaddr *)&aS, lgA);
 	if (res == -1)
 	{
 		perror("Erreur connect\n");
 		return -1;
 	}
+
 
 	//demande pseudo
 	char pseudo[200];
@@ -482,22 +475,42 @@ int main(int argc, char *argv[])
 	fgets(pseudo, 200, stdin);
 	//remplace \n par \0
 	pseudo[strlen(pseudo) - 1] = '\0';
-	envoiepseudo(pseudo, &dS);
+
+	//initialisation envoiePseudo
+    struct param_thread param_pseudo;
+    param_pseudo.socket = dSMessage;
+    strcpy(param_pseudo.buffer, pseudo);
+
+    envoie((void*)&param_pseudo);
+
+    res = connect(dSFile, (struct sockaddr *)&aS, lgA);
+    if (res == -1)
+    {
+        perror("Erreur connect\n");
+        return -1;
+    }
 
 	char msg[TMAX] = "";
 
-	//création des threads
+	//création des deux threads
 	pthread_t threadEnvoi;
 	pthread_t threadReception;
 
+	// initialisation du threadEnvoie
+    struct param_thread param_envoie;
+    param_envoie.socket = dSMessage;
 
-	if (pthread_create(&threadEnvoi, NULL, envoie, &dS) != 0)
+	if (pthread_create(&threadEnvoi, NULL, fctEnvoiThread, (void *)&param_envoie) != 0)
 	{
 		perror("erreur creation thread\n");
 		return -1;
 	}
 
-	if (pthread_create(&threadReception, NULL, reception, &dS) != 0)
+	// initialisation du threadReception
+	struct param_thread param_reception;
+	param_reception.socket = dSMessage;
+
+	if (pthread_create(&threadReception, NULL, fctReceptionThread, (void *)&param_reception) != 0)
 	{
 		perror("erreur creation thread\n");
 		return -1;
@@ -508,6 +521,7 @@ int main(int argc, char *argv[])
 	pthread_join(threadReception, NULL);
 
 	//ferme la socket
-	close(dS);
+	close(dSMessage);
+	close(dSFile);
 	return 0;
 }
