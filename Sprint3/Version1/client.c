@@ -176,6 +176,9 @@ void *receptionfichier(void *null){
     }
 
 	int remainData = taille_fichier;
+	printf("la taille du fichier vaut %d \n", remainData);
+
+	res = 0;
 
     // reception du contenu du fichier
     while (remainData > 0 && (res = recv(param.socket, buffer, BUFSIZ, 0)) > 0 ){
@@ -188,8 +191,8 @@ void *receptionfichier(void *null){
             pthread_exit(NULL);
         }
         fprintf(fichier, "%s", buffer);
-        remainData = remainData - res;
-        printf("J'ai reçu %d bytes, il me reste à recevoir %d bytes \n", res, remainData);
+        remainData = remainData - strlen(buffer);
+        printf("J'ai reçu %ld bytes, il me reste à recevoir %d bytes \n", strlen(buffer), remainData);
 	}
 
 	printf("\n le Fichier reçu se trouve maintenant dans le dossier Telechargement :\n");
@@ -336,8 +339,6 @@ void *envoiFichier(void *paramVoid){
 
         int res = 0;
 
-        printf("le nom du fichier vaut %s", fileName);
-
         //initialisation et envoie du nom du fichier
         struct param_thread param;
         param.socket = dSFile;
@@ -366,6 +367,7 @@ void *envoiFichier(void *paramVoid){
         //envoie du contenu du fichier
         long offset = 0;
         int remainData = sizeFileByte;
+        printf("la taille du fichier vaut %d \n", remainData);
 
         // sendfile() copie des données entre deux descripteurs de fichier. Offset est remplie avec la position de l'octet immédiatement après le dernier octet lu.
         while (((res = sendfile(param.socket, fps, &offset, BUFSIZ)) > 0) && remainData > 0){
