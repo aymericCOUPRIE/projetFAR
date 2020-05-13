@@ -242,6 +242,31 @@ void *fctReceptionThread (void* paramVoid){
      pthread_exit(NULL);
 }
 
+void *envoi_nv_salon (void* paramVoid){
+
+    struct param_thread *param = (struct param_thread *)paramVoid;
+
+    int salon;
+    char salon_saisie[10];
+    printf("saisir votre salon: \n");
+    fgets(salon_saisie, 10, stdin);
+    salon = atoi(salon_saisie);
+    //Si salon saisi n'est pas un entier, le salon par défaut est le salon  0
+    //Envoi du numéro du salon
+    int res = send(param -> socket, &salon, sizeof(int), 0);
+    if (res == -1)
+    {
+        perror("Erreur envoie\n");
+        exit(-1);
+    }
+    if (res == 0)
+    {
+        perror("Socket fermée\n");
+        exit(0);
+    }
+
+}
+
 //fonction pour envoyer un message
 void *envoie(void *paramVoid) {
 
@@ -413,6 +438,9 @@ void *fctEnvoiThread (void* paramVoid){
     while (1){
         fgets(param -> buffer, BUFSIZ, stdin); //saisie clavier du message
         envoie((void *)param);
+        if (strcmp (param -> buffer, "salon\n") == 0 ) {
+            envoi_nv_salon((void *)param);
+        }
         envoi_Msg_file((void *)param);
     }
     pthread_exit(NULL);
@@ -482,6 +510,11 @@ int main(int argc, char *argv[])
     strcpy(param_pseudo.buffer, pseudo);
 
     envoie((void*)&param_pseudo);
+
+    //demande numéro salon
+    struct param_thread param_salon;
+    param_salon.socket = dSMessage;
+    envoi_nv_salon((void *)&param_salon);
 
     res = connect(dSFile, (struct sockaddr *)&aS, lgA);
     if (res == -1)
