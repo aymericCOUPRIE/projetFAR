@@ -9,15 +9,37 @@
 #define TMAX 65000 //taille maximum des paquets (en octets)
 #define nbrClientMax 200
 
-int tabSalon[200]; //tableau de distribution de salon
+/*int tabSalon[200]; //tableau de distribution de salon
 int tabdSC[200] ; //tableau de 200 sockets
 int tabdSCFichier[200]; //200 sockets pour les fichiers
 char pseudos[200][10];
 int nbrClient;
 int fin = 0;
-int nbrSalonMax = 5;
+int nbrSalonMax = 5;*/
+
 pthread_t thread[nbrClientMax]; //pour les messages
 pthread_t thread2[nbrClientMax]; //pour les fichiers
+
+int fin = 0;
+int nbrClient;
+int nbrSalon;
+
+struct client {
+    int socketMes;
+    int socketFil;
+    char pseudo[10];
+    int salon;
+};
+
+struct salon {
+    char name[100];
+    char desc[200];
+    int nbrClientPres;
+    int capacityMax;
+};
+
+struct client tabClient[200];
+struct salon tabSalon[10];
 
 //fonction pour envoyer un message
 int envoie(int SockE, char* message) {
@@ -87,22 +109,41 @@ int reception(int sockE, char* message){
 
 //fonction pour récupérer le pseudo
 void recuperer_pseudo (char *pseudo, int i){
-    if (reception(tabdSC[i], pseudo) != 1) {
+    if (reception(tabClient[i].socketMes, pseudo) != 1) {
         perror("err: recupération pseudo");
-        strcpy(pseudos[i], "inconnu");
+        strcpy(tabClient[i].pseudo, "inconnu");
     }
 }
 
+int salon_valable (int salon){
+    return (salon <= nbrSalon) && (tabSalon[salon].capacityMax != tabSalon[salon].nbrClientPres);
+}
+
 void recuperer_salon (int *salon, int i){
-    int rec = recv(tabdSC[i], &salon[i], sizeof(int), 0);
-    if (rec == -1){
-        perror("Erreur 1ere reception\n");
-        exit(0);
+    printf("voici les salons disponibles");
+    int j = 0;
+    while (j<nbrSalon){
+        printf("voici le salon n°%d %s : %s contenant %d personne et ayant pour capacité max %d \n",
+        j,
+        tabSalon[j].name,
+        tabSalon[j].desc,
+        tabSalon[j].nbrClientPres,
+        tabSalon[j].capacityMax);
+        j = j + 1;
     }
-    if (rec == 0){
-        perror("Socket fermée\n");
-        exit(0);
-    }
+    do {
+        int rec = recv(tabClient[i].socketMes, &tabClient[i].salon, sizeof(int), 0);
+        if (rec == -1){
+            perror("Erreur 1ere reception\n");
+            exit(0);
+        }
+        if (rec == 0){
+            perror("Socket fermée\n");
+            exit(0);
+        }
+    } while (salon_valable(tabClient[i].salon) == 0);
+    tabSalon[tabClient[i].salon].nbrClientPres = tabSalon[tabClient[i].salon].nbrClientPres + 1;
+
 }
 
 //fonction pour la transmission des messages
@@ -113,7 +154,7 @@ void * transmission (void * args){
     char msg[TMAX] = "";
 
     while(fin != 1){
-        if (reception(tabdSC[i], msg) != 1){
+        if (reception(tabClient[i].socketMes, msg) != 1){
             perror("err : recep dans trans");
             pthread_exit(NULL);
         }
@@ -123,23 +164,25 @@ void * transmission (void * args){
 		}
 
 		if(strcmp(msg,"salon\n") == 0) {
-		    recuperer_salon(tabSalon, i);
-		    printf("%s est maintenant dans le salon %d \n", pseudos[i], tabSalon[i]);
+		    int old = tabClient[i].salon;
+		    recuperer_salon(&tabClient[i].salon, i);
+		    tabSalon[old].nbrClientPres = tabSalon[old].nbrClientPres - 1;
+		    printf("%s est maintenant dans le salon %d \n", tabClient[i].pseudo, tabClient[i].salon);
 		} else {
 		    int salon;
-            salon = tabSalon[i];
+            salon = tabClient[i].salon;
 
             //on met le pseudo au debut du message avant de le transmettre
             char newMsg[TMAX];
-            strcpy(newMsg, pseudos[i]);
+            strcpy(newMsg, tabClient[i].pseudo);
             strcat(newMsg, ":");
             strcat(newMsg, msg);
 
             int j = 0;
             while (j < nbrClient){
-                if (i != j && salon == tabSalon[j]){
+                if (i != j && salon == tabClient[j].salon){
                 //on transmet son message à l'autre client
-                    if (envoie(tabdSC[j], newMsg) != 1){
+                    if (envoie(tabClient[j].socketMes, newMsg) != 1){
                         perror("err : env dans trans");
                         pthread_exit(NULL);
 
@@ -163,12 +206,12 @@ void* transmissionFichier(void* arg) {
     int tailleFichier = 0;
 
     int salon;
-    salon = tabSalon[i];
+    salon = tabClient[i].salon;
 
     while (1) {
 
         //recevoir le titre du fichier
-        if (reception(tabdSCFichier[i], msg) != 1){
+        if (reception(tabClient[i].socketFil, msg) != 1){
             perror("err : recep dans trans");
             pthread_exit(NULL);
         }
@@ -177,9 +220,9 @@ void* transmissionFichier(void* arg) {
         
         int j = 0; 
         while (j < nbrClient){
-            if (j != i  && salon == tabSalon[j]) {
+            if (j != i  && salon == tabClient[j].salon) {
                 //on envoie à tout le nom du fichier
-                if (envoie(tabdSCFichier[j], msg) != 1){
+                if (envoie(tabClient[j].socketFil, msg) != 1){
 	                perror("erreur nom du fichier");
 	                pthread_exit(NULL);
                 }
@@ -190,7 +233,7 @@ void* transmissionFichier(void* arg) {
 
 
         //recevoir la taille fichier
-        int rec = recv(tabdSCFichier[i], &tailleFichier, sizeof(int), 0);
+        int rec = recv(tabClient[i].socketFil, &tailleFichier, sizeof(int), 0);
         if (rec == -1){
             perror("Erreur 1ere reception\n");
             exit(0);
@@ -202,9 +245,9 @@ void* transmissionFichier(void* arg) {
 
         j = 0; 
         while (j < nbrClient){
-            if (j != i && salon == tabSalon[j]) {
+            if (j != i && salon == tabClient[j].salon) {
                 //on envoie à tout le monde la taille du fichier
-                int mes = send(tabdSCFichier[j], &tailleFichier, sizeof(int), 0);
+                int mes = send(tabClient[j].socketFil, &tailleFichier, sizeof(int), 0);
                 if (mes == -1){
                     perror("Erreur envoie\n");
                     exit(0);
@@ -222,7 +265,7 @@ void* transmissionFichier(void* arg) {
         int remainData = tailleFichier;
         char buffer[BUFSIZ];
 
-        while (remainData > 0 && (res = recv(tabdSCFichier[i], buffer, BUFSIZ, 0)) > 0 ){
+        while (remainData > 0 && (res = recv(tabClient[i].socketFil, buffer, BUFSIZ, 0)) > 0 ){
             j = 0;
             if (res == -1){
                 perror("Erreur reception mot fichier\n");
@@ -233,8 +276,8 @@ void* transmissionFichier(void* arg) {
                 pthread_exit(NULL);
             }
             while(j < nbrClient){
-                if (i != j && salon == tabSalon[j]){
-                    int mes = send(tabdSCFichier[j], buffer, BUFSIZ, 0);
+                if (i != j && salon == tabClient[j].salon){
+                    int mes = send(tabClient[j].socketFil, buffer, BUFSIZ, 0);
                     if (mes == -1){
                         perror("Erreur envoie\n");
                         exit(0);
@@ -270,25 +313,25 @@ void * connexion (void * args){
 
     while (nbrClient < nbrClientMax && fin == 0) {
 
-            tabdSC[i] = accept(dS, (struct sockaddr*) &aC,&lg);
-            if(tabdSC[i] == -1){
+            tabClient[i].socketMes = accept(dS, (struct sockaddr*) &aC,&lg);
+            if(tabClient[i].socketMes == -1){
                 perror("Erreur accept client \n");
                 pthread_exit(NULL);
             }
 
             printf ("j'ai accepté un nouveau client \n");
 
-            recuperer_pseudo (pseudos[i], i);
+            recuperer_pseudo (tabClient[i].pseudo, i);
 
-            recuperer_salon (tabSalon, i);
+            recuperer_salon (&tabClient[i].salon, i);
 
-            tabdSCFichier[i] = accept(dS, (struct sockaddr*) &aC,&lg);
-            if(tabdSCFichier[i] == -1){
+            tabClient[i].socketFil = accept(dS, (struct sockaddr*) &aC,&lg);
+            if(tabClient[i].socketFil == -1){
                 perror("Erreur accept client \n");
                 pthread_exit(NULL);
             }
 
-            printf("client numéro %d connecté avec le pseudo %s dans le salon %d \n", i+1, pseudos[i], tabSalon[i]);
+            printf("client numéro %d connecté avec le pseudo %s dans le salon %d \n", i+1, tabClient[i].pseudo, tabClient[i].salon);
 
             j = i;
             i = i + 1;
@@ -312,12 +355,32 @@ void * connexion (void * args){
 
 int main(int argc, char* argv[]){
 
+    // je créer un salon par default
+
+    struct salon defaultSalon;
+    strcpy(defaultSalon.name,"salon par défaut");
+    strcpy(defaultSalon.desc,"si aucun salon n'est choisit le client se retrouve dans celui ci");
+    defaultSalon.nbrClientPres = 0;
+    defaultSalon.capacityMax = 200;
+
+    tabSalon[0] = defaultSalon;
+
+    struct salon premSalon;
+    strcpy(premSalon.name,"premier salon");
+    strcpy(premSalon.desc,"premier salon privé créé par le serveur");
+    premSalon.nbrClientPres = 0;
+    premSalon.capacityMax = 5;
+
+    tabSalon[1] = premSalon;
+
+    nbrSalon = 2;
+
     //initialisation du tabdSC à -1;
-    int i = 0;
+    /*int i = 0;
     while (i < nbrClientMax){
         tabdSC[i] = -1;
         i = i+1;
-    }
+    }*/
 
     if (argc != 2) {
         perror("paramètres : ./serveur  Numero_de_port");
@@ -378,8 +441,8 @@ int main(int argc, char* argv[]){
     for (long i = 0; i < nbrClient; i++) {
         pthread_cancel(thread[i]); //ferme le thread du client i
         pthread_cancel(thread2[i]);
-        close(tabdSC[i]);//ferme la socket du client i
-        close(tabdSCFichier[i]);
+        close(tabClient[i].socketMes);//ferme la socket du client i
+        close(tabClient[i].socketFil);
     }
 
     pthread_cancel(threadConnexion); //on ferme la socket de connexion
