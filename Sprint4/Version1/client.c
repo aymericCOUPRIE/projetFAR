@@ -306,6 +306,34 @@ void *envoie(void *paramVoid) {
 
 }
 
+void *ajout_salon (void* paramVoid){
+
+    struct param_thread *param = (struct param_thread *)paramVoid;
+
+    printf ("veuillez saisir le nom du nouveau salon\n");
+    fgets(param -> buffer, BUFSIZ, stdin); //saisie clavier du message
+    param -> buffer[strlen(param -> buffer) - 1] = '\0';
+    envoie((void *)param);
+    printf ("veuillez saisir la description du nouveau salon\n");
+    fgets(param -> buffer, BUFSIZ, stdin); //saisie clavier du message
+    param -> buffer[strlen(param -> buffer) - 1] = '\0';
+    envoie((void *)param);
+    printf ("veuillez saisir la capacité max du nouveau salon\n");
+    fgets(param -> buffer, BUFSIZ, stdin); //saisie clavier du message
+    int capa = atoi(param -> buffer);
+    int res = send(param -> socket, &capa, sizeof(int), 0);
+        if (res == -1)
+        {
+            perror("Erreur envoie\n");
+            exit(-1);
+        }
+        if (res == 0)
+        {
+            perror("Socket fermée\n");
+            exit(0);
+        }
+}
+
 //fonction qui affiche la liste des répertoire dans un nouveau terminal
 void *affichage_repertoire (){
     FILE* fp1 = new_tty();
@@ -440,6 +468,9 @@ void *fctEnvoiThread (void* paramVoid){
         envoie((void *)param);
         if (strcmp (param -> buffer, "salon\n") == 0 ) {
             envoi_nv_salon((void *)param);
+        }
+        if (strcmp (param -> buffer, "ajout salon\n") == 0){
+            ajout_salon((void *)param);
         }
         envoi_Msg_file((void *)param);
     }

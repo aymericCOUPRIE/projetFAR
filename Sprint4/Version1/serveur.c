@@ -120,7 +120,7 @@ int salon_valable (int salon){
 }
 
 void recuperer_salon (int *salon, int i){
-    printf("voici les salons disponibles");
+    printf("voici les salons disponibles\n");
     int j = 0;
     while (j<nbrSalon){
         printf("voici le salon n°%d %s : %s contenant %d personne et ayant pour capacité max %d \n",
@@ -146,6 +146,31 @@ void recuperer_salon (int *salon, int i){
 
 }
 
+void * ajout_salon(int i){
+
+    struct salon newSalon;
+    reception(tabClient[i].socketMes, newSalon.name);
+    reception(tabClient[i].socketMes, newSalon.desc);
+    newSalon.nbrClientPres = 0;
+    int capa = 0;
+    int rec = recv(tabClient[i].socketMes, &capa, sizeof(int), 0);
+    if (rec == -1){
+        perror("Erreur 1ere reception\n");
+        exit(0);
+    }
+    if (rec == 0){
+        perror("Socket fermée\n");
+        exit(0);
+    }
+    if (capa < 0 || capa > 200){
+        capa = 10; //je choisi une capacité maximal par défault
+    }
+    newSalon.capacityMax = capa;
+
+    tabSalon[nbrSalon] = newSalon;
+    nbrSalon = nbrSalon + 1;
+}
+
 //fonction pour la transmission des messages
 void * transmission (void * args){
 
@@ -168,6 +193,8 @@ void * transmission (void * args){
 		    recuperer_salon(&tabClient[i].salon, i);
 		    tabSalon[old].nbrClientPres = tabSalon[old].nbrClientPres - 1;
 		    printf("%s est maintenant dans le salon %d \n", tabClient[i].pseudo, tabClient[i].salon);
+		} else if(strcmp(msg, "ajout salon\n") == 0 && nbrSalon < 10) {
+		    ajout_salon(i);
 		} else {
 		    int salon;
             salon = tabClient[i].salon;
