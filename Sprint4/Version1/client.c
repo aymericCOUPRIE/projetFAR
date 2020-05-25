@@ -13,6 +13,8 @@
 #include <fcntl.h>
 #include <sys/sendfile.h>
 
+#include "client.h"
+
 #define TMAX 65000 //taille maximum des paquets (en octets)
 
 struct param_thread {

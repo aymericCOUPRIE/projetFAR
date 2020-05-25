@@ -9,6 +9,8 @@
 #define TMAX 65000 //taille maximum des paquets (en octets)
 #define nbrClientMax 200
 
+#include "serveur.h"
+
 /*int tabSalon[200]; //tableau de distribution de salon
 int tabdSC[200] ; //tableau de 200 sockets
 int tabdSCFichier[200]; //200 sockets pour les fichiers
