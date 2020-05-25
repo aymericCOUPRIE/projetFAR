@@ -245,6 +245,10 @@ void* transmissionFichier(void* arg) {
             pthread_exit(NULL);
         }
 
+        salon = tabClient[i].salon;
+
+        printf("salon vaut %d", salon);
+
         printf("le titre du fichier est : %s \n", msg);
         
         int j = 0; 
